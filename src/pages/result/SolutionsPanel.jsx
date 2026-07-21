@@ -11,6 +11,15 @@ const formatTime = (seconds) => {
   return m > 0 ? `${m}m ${r}s` : `${r}s`;
 };
 
+// Pick text for the chosen language, falling back to the other so nothing is
+// blank if a translation is missing.
+const pickText = (textObj, lang) => {
+  if (!textObj) return "";
+  return lang === "hi"
+    ? textObj.hindi || textObj.english || ""
+    : textObj.english || textObj.hindi || "";
+};
+
 const getStatus = (q) => {
   if (q.answerStatus === "answered") {
     return q.isCorrect ? "correct" : "incorrect";
@@ -61,6 +70,14 @@ const FILTERS = [
 
 function SolutionsPanel({ questions }) {
   const [filter, setFilter] = useState("all");
+  const [lang, setLang] = useState(
+    () => localStorage.getItem("testLang") || "en"
+  );
+
+  const changeLang = (next) => {
+    setLang(next);
+    localStorage.setItem("testLang", next);
+  };
 
   const counts = useMemo(() => {
     const c = {
@@ -86,22 +103,48 @@ function SolutionsPanel({ questions }) {
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
+      {/* Filters + language */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`px-4 py-2 rounded-2xl text-sm font-medium border transition ${
+                filter === f.key
+                  ? "bg-black text-white border-black"
+                  : "border-gray-300 text-gray-700 hover:border-black"
+              }`}
+            >
+              {f.label}
+              <span className="ml-2 opacity-70">{counts[f.key]}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Language toggle */}
+        <div className="flex items-center rounded-xl border border-gray-300 overflow-hidden">
           <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`px-4 py-2 rounded-2xl text-sm font-medium border transition ${
-              filter === f.key
-                ? "bg-black text-white border-black"
-                : "border-gray-300 text-gray-700 hover:border-black"
+            onClick={() => changeLang("en")}
+            className={`px-3 py-2 text-sm font-medium transition ${
+              lang === "en"
+                ? "bg-black text-white"
+                : "bg-white text-gray-600 hover:text-black"
             }`}
           >
-            {f.label}
-            <span className="ml-2 opacity-70">{counts[f.key]}</span>
+            English
           </button>
-        ))}
+          <button
+            onClick={() => changeLang("hi")}
+            className={`px-3 py-2 text-sm font-medium transition ${
+              lang === "hi"
+                ? "bg-black text-white"
+                : "bg-white text-gray-600 hover:text-black"
+            }`}
+          >
+            हिंदी
+          </button>
+        </div>
       </div>
 
       {visible.length === 0 ? (
@@ -178,7 +221,7 @@ function SolutionsPanel({ questions }) {
               <div
                 className="text-gray-900 leading-7 prose max-w-none"
                 dangerouslySetInnerHTML={{
-                  __html: q.questionText?.english || "",
+                  __html: pickText(q.questionText, lang),
                 }}
               />
 
@@ -204,7 +247,7 @@ function SolutionsPanel({ questions }) {
                         <div
                           className="prose max-w-none flex-1"
                           dangerouslySetInnerHTML={{
-                            __html: option.text?.english || "",
+                            __html: pickText(option.text, lang),
                           }}
                         />
 
@@ -239,7 +282,7 @@ function SolutionsPanel({ questions }) {
               )}
 
               {/* Explanation */}
-              {q.explanation?.english && (
+              {(q.explanation?.english || q.explanation?.hindi) && (
                 <div className="mt-6 bg-gray-50 rounded-2xl p-5">
                   <p className="text-sm font-semibold text-gray-700 mb-2">
                     Explanation
@@ -247,7 +290,7 @@ function SolutionsPanel({ questions }) {
                   <div
                     className="prose max-w-none text-gray-700"
                     dangerouslySetInnerHTML={{
-                      __html: q.explanation.english,
+                      __html: pickText(q.explanation, lang),
                     }}
                   />
                 </div>

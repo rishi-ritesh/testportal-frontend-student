@@ -99,30 +99,30 @@ function ResultPage() {
       {/* HEADLINE */}
       {/* ========================= */}
 
-      <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
-        <div className="flex items-start justify-between">
+      <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-r from-green-700 to-green-500 px-8 py-7 flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm text-gray-500">
+            <p className="text-green-100 text-sm font-medium">
               Test completed
               {result.attemptType &&
                 (result.attemptType === "ranked"
                   ? " · First Attempt (Ranked)"
                   : " · Practice Attempt")}
             </p>
-            <h1 className="text-3xl font-bold text-gray-900 mt-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-white mt-1">
               Your Result
             </h1>
           </div>
 
           <button
             onClick={() => navigate("/dashboard")}
-            className="px-5 py-3 rounded-2xl border border-gray-300 hover:border-black transition"
+            className="shrink-0 bg-white/15 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/25 transition"
           >
             Back to Dashboard
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mt-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 p-8">
           <Stat label="Score" value={result.score} />
           <Stat
             label="Accuracy"
@@ -142,7 +142,7 @@ function ResultPage() {
             accent="text-green-600"
           />
         </div>
-      </div>
+      </section>
 
       {/* ========================= */}
       {/* TABS */}
@@ -158,7 +158,7 @@ function ResultPage() {
             onClick={() => setTab(t.key)}
             className={`px-5 py-2.5 rounded-2xl text-sm font-medium border transition ${
               tab === t.key
-                ? "bg-black text-white border-black"
+                ? "bg-blue-600 text-white border-blue-600"
                 : "border-gray-300 text-gray-700 hover:border-black"
             }`}
           >

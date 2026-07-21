@@ -34,6 +34,19 @@ function AppRoutes() {
                 }
             />
 
+            {/* Test screen — deliberately OUTSIDE StudentLayout so there is no
+                top navigation bar while a test is in progress */}
+            <Route
+                path="/attempt/:attemptId"
+                element={
+                    <ProtectedRoute>
+                        <div className="min-h-screen bg-gray-100 p-6">
+                            <AttemptPage />
+                        </div>
+                    </ProtectedRoute>
+                }
+            />
+
             {/* Protected Student Routes */}
             <Route
                 element={
@@ -57,11 +70,6 @@ function AppRoutes() {
                 <Route
                     path="/test/:testId/instructions"
                     element={<InstructionsPage />}
-                />
-
-                <Route
-                    path="/attempt/:attemptId"
-                    element={<AttemptPage />}
                 />
 
                 {/* Result Page */}

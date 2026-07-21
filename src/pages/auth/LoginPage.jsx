@@ -53,11 +53,14 @@ function LoginPage() {
     <div className="w-full max-w-md bg-white rounded-3xl border border-gray-200 shadow-lg p-8">
       {/* Logo */}
       <div className="mb-10">
-        <h1 className="text-4xl font-bold text-gray-900">
-          TestPortal
-        </h1>
+        <div className="flex items-center gap-3">
+          <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center text-white text-xl font-bold shadow-sm">
+            T
+          </span>
+          <h1 className="text-3xl font-bold text-gray-900">TestPortal</h1>
+        </div>
 
-        <p className="text-gray-500 mt-2">
+        <p className="text-gray-500 mt-4">
           Continue your preparation journey
         </p>
       </div>
@@ -136,7 +139,9 @@ function LoginPage() {
           disabled={loading}
           className="
             w-full
-            bg-black
+            bg-gradient-to-r
+            from-blue-700
+            to-blue-600
             text-white
             py-3.5
             rounded-2xl

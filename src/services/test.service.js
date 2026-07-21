@@ -105,6 +105,33 @@ export const submitSection =
     return response.data;
   };
 
+export const pauseAttempt = async (attemptId, remainingSeconds) => {
+  const response = await api.post(
+    "/api/student/attempt/pause",
+    { attemptId, remainingSeconds }
+  );
+
+  return response.data;
+};
+
+export const syncTimer = async (attemptId, remainingSeconds) => {
+  const response = await api.post(
+    "/api/student/attempt/timer",
+    { attemptId, remainingSeconds }
+  );
+
+  return response.data;
+};
+
+export const resumeAttempt = async (attemptId) => {
+  const response = await api.post(
+    "/api/student/attempt/resume",
+    { attemptId }
+  );
+
+  return response.data;
+};
+
 export const getResult = async (
   attemptId
 ) => {
