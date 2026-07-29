@@ -37,6 +37,15 @@ function StudentLayout() {
             <NavLink to="/dashboard" className={navClass}>
               Dashboard
             </NavLink>
+            <NavLink to="/series" className={navClass}>
+              Test Series
+            </NavLink>
+            <NavLink to="/attempts" className={navClass}>
+              My Attempts
+            </NavLink>
+            <NavLink to="/bookmarks" className={navClass}>
+              Bookmarks
+            </NavLink>
           </nav>
         </div>
 

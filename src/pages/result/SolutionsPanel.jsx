@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import { getBookmarkIds, toggleBookmark } from "../../services/test.service";
 
 // =========================
 // HELPERS
@@ -73,10 +75,41 @@ function SolutionsPanel({ questions }) {
   const [lang, setLang] = useState(
     () => localStorage.getItem("testLang") || "en"
   );
+  const [bookmarked, setBookmarked] = useState(() => new Set());
 
   const changeLang = (next) => {
     setLang(next);
     localStorage.setItem("testLang", next);
+  };
+
+  // seed which questions are already bookmarked
+  useEffect(() => {
+    getBookmarkIds()
+      .then((ids) => setBookmarked(new Set(ids.map(String))))
+      .catch(() => {});
+  }, []);
+
+  const toggleBm = async (questionId) => {
+    const key = String(questionId);
+    const flip = (set) => {
+      const n = new Set(set);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    };
+
+    setBookmarked(flip); // optimistic
+    try {
+      const res = await toggleBookmark(questionId);
+      setBookmarked((prev) => {
+        const n = new Set(prev);
+        if (res.bookmarked) n.add(key);
+        else n.delete(key);
+        return n;
+      });
+    } catch {
+      setBookmarked(flip); // revert
+    }
   };
 
   const counts = useMemo(() => {
@@ -198,22 +231,40 @@ function SolutionsPanel({ questions }) {
                   </p>
                 </div>
 
-                <div className="text-right shrink-0 text-sm">
-                  <p
-                    className={`font-semibold ${
-                      q.marksAwarded > 0
-                        ? "text-green-600"
-                        : q.marksAwarded < 0
-                        ? "text-red-600"
-                        : "text-gray-500"
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <button
+                    onClick={() => toggleBm(q.questionId)}
+                    title={
+                      bookmarked.has(String(q.questionId))
+                        ? "Remove bookmark"
+                        : "Bookmark this question"
+                    }
+                    className={`text-xl leading-none transition ${
+                      bookmarked.has(String(q.questionId))
+                        ? "text-amber-500"
+                        : "text-gray-300 hover:text-amber-500"
                     }`}
                   >
-                    {q.marksAwarded > 0 ? "+" : ""}
-                    {q.marksAwarded}
-                  </p>
-                  <p className="text-gray-400 mt-1">
-                    {formatTime(q.timeSpent)}
-                  </p>
+                    {bookmarked.has(String(q.questionId)) ? "★" : "☆"}
+                  </button>
+
+                  <div className="text-right text-sm">
+                    <p
+                      className={`font-semibold ${
+                        q.marksAwarded > 0
+                          ? "text-green-600"
+                          : q.marksAwarded < 0
+                          ? "text-red-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {q.marksAwarded > 0 ? "+" : ""}
+                      {q.marksAwarded}
+                    </p>
+                    <p className="text-gray-400 mt-1">
+                      {formatTime(q.timeSpent)}
+                    </p>
+                  </div>
                 </div>
               </div>
 

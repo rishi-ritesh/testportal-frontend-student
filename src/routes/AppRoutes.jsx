@@ -14,6 +14,9 @@ import InstructionsPage from "../pages/test/InstructionsPage";
 import AttemptPage from "../pages/attempt/AttemptPage";
 import ResultPage from "../pages/result/ResultPage";
 import PackageDetailPage from "../pages/packages/PackageDetailPage";
+import BookmarksPage from "../pages/bookmarks/BookmarksPage";
+import SeriesPage from "../pages/series/SeriesPage";
+import AttemptsPage from "../pages/attempts/AttemptsPage";
 
 function AppRoutes() {
     return (
@@ -58,6 +61,22 @@ function AppRoutes() {
                 <Route
                     path="/dashboard"
                     element={<DashboardPage />}
+                />
+
+                {/* Full lists */}
+                <Route
+                    path="/series"
+                    element={<SeriesPage />}
+                />
+                <Route
+                    path="/attempts"
+                    element={<AttemptsPage />}
+                />
+
+                {/* Bookmarks */}
+                <Route
+                    path="/bookmarks"
+                    element={<BookmarksPage />}
                 />
 
                 {/* Test Series (Packages) */}

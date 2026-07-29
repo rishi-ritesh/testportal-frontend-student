@@ -142,3 +142,22 @@ export const getResult = async (
 
   return response.data;
 };
+
+// =========================
+// BOOKMARKS
+// =========================
+
+export const getBookmarks = async () => {
+  const response = await api.get("/api/student/bookmarks");
+  return response.data;
+};
+
+export const getBookmarkIds = async () => {
+  const response = await api.get("/api/student/bookmarks/ids");
+  return response.data;
+};
+
+export const toggleBookmark = async (questionId) => {
+  const response = await api.post(`/api/student/bookmark/${questionId}`);
+  return response.data;
+};
