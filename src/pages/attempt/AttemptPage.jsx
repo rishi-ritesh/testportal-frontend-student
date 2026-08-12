@@ -20,6 +20,8 @@ import {
   syncTimer,
 } from "../../services/test.service";
 
+import { drawMathInHtml } from "../../lib/math";
+
 // =========================
 // HELPERS
 // =========================
@@ -815,7 +817,7 @@ function AttemptPage() {
           <div
             className="text-gray-900 leading-7 prose max-w-none"
             dangerouslySetInnerHTML={{
-              __html: pickText(currentQuestion.question, lang),
+              __html: drawMathInHtml(pickText(currentQuestion.question, lang)),
             }}
           />
 
@@ -847,7 +849,7 @@ function AttemptPage() {
                     <div
                       className="prose max-w-none"
                       dangerouslySetInnerHTML={{
-                        __html: pickText(option.text, lang),
+                        __html: drawMathInHtml(pickText(option.text, lang)),
                       }}
                     />
                   </div>

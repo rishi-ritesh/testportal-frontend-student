@@ -1,1 +1,25 @@
 @import "tailwindcss";
+
+/* ---- formulas ----
+   Kept in step with the admin panel's editor.css so a question is typeset the
+   same way in both portals. */
+
+/* Hindi inside a formula falls back to a Devanagari face */
+.katex .brahmic_fallback {
+  font-family: "Noto Sans Devanagari", "Nirmala UI", "Segoe UI", sans-serif;
+}
+
+/* Powers and indices read as half the size of the number they sit on.
+   KaTeX ships them at 0.7em, which is too close to the base size here.
+   Scoped to .msupsub on purpose: the same size class is also used for the
+   top and bottom of an ordinary fraction, and those must not shrink. */
+.katex .msupsub .katex-sizing.reset-size6.size3,
+.katex .msupsub .sizing.reset-size6.size3 {
+  font-size: 0.5em;
+}
+
+/* A formula must never stretch the question card; long ones scroll instead. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+}

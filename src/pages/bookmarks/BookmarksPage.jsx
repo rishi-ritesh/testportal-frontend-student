@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getBookmarks, toggleBookmark } from "../../services/test.service";
+import { drawMathInHtml } from "../../lib/math";
 
 const pickText = (textObj, lang) => {
   if (!textObj) return "";
@@ -116,7 +117,9 @@ function BookmarksPage() {
             {/* Question */}
             <div
               className="text-gray-900 leading-7 prose max-w-none"
-              dangerouslySetInnerHTML={{ __html: pickText(q.questionText, lang) }}
+              dangerouslySetInnerHTML={{
+                __html: drawMathInHtml(pickText(q.questionText, lang)),
+              }}
             />
 
             {/* Options */}
@@ -137,7 +140,7 @@ function BookmarksPage() {
                       <div
                         className="prose max-w-none flex-1"
                         dangerouslySetInnerHTML={{
-                          __html: pickText(option.text, lang),
+                          __html: drawMathInHtml(pickText(option.text, lang)),
                         }}
                       />
                       {isCorrect && (
@@ -160,7 +163,7 @@ function BookmarksPage() {
                 <div
                   className="prose max-w-none text-gray-700"
                   dangerouslySetInnerHTML={{
-                    __html: pickText(q.explanation, lang),
+                    __html: drawMathInHtml(pickText(q.explanation, lang)),
                   }}
                 />
               </div>
