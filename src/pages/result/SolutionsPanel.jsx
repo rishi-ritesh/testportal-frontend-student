@@ -71,8 +71,24 @@ const FILTERS = [
   { key: "marked", label: "Marked" },
 ];
 
+// Shared by the status row and the subject row.
+const ALL = "all";
+
+// A question's subject, with a fallback so an unlabelled one still groups
+// somewhere instead of vanishing from every subject.
+const subjectOf = (q) => q.subjectName || "Unspecified";
+
+const matchesStatus = (q, key) => {
+  if (key === ALL) return true;
+  if (key === "marked") return Boolean(q.markedForReview);
+  return getStatus(q) === key;
+};
+
+const matchesSubject = (q, name) => name === ALL || subjectOf(q) === name;
+
 function SolutionsPanel({ questions }) {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(ALL);
+  const [subject, setSubject] = useState(ALL);
   const [lang, setLang] = useState(
     () => localStorage.getItem("testLang") || "en"
   );
@@ -113,77 +129,125 @@ function SolutionsPanel({ questions }) {
     }
   };
 
-  const counts = useMemo(() => {
-    const c = {
-      all: questions.length,
-      correct: 0,
-      incorrect: 0,
-      unattempted: 0,
-      marked: 0,
-    };
+  // Subjects in the order they first appear, so the row follows the order of
+  // the paper rather than the alphabet.
+  const subjects = useMemo(() => {
+    const seen = [];
     questions.forEach((q) => {
+      const name = subjectOf(q);
+      if (!seen.includes(name)) seen.push(name);
+    });
+    return seen;
+  }, [questions]);
+
+  // Each row is counted against the *other* row's choice, so every number says
+  // how many questions that button would actually show if clicked.
+  const counts = useMemo(() => {
+    const c = { all: 0, correct: 0, incorrect: 0, unattempted: 0, marked: 0 };
+    questions.forEach((q) => {
+      if (!matchesSubject(q, subject)) return;
+      c.all++;
       c[getStatus(q)]++;
       if (q.markedForReview) c.marked++;
     });
     return c;
-  }, [questions]);
+  }, [questions, subject]);
 
-  const visible = useMemo(() => {
-    if (filter === "all") return questions;
-    if (filter === "marked")
-      return questions.filter((q) => q.markedForReview);
-    return questions.filter((q) => getStatus(q) === filter);
-  }, [questions, filter]);
+  const subjectCounts = useMemo(() => {
+    const c = { [ALL]: 0 };
+    subjects.forEach((s) => (c[s] = 0));
+    questions.forEach((q) => {
+      if (!matchesStatus(q, filter)) return;
+      c[ALL]++;
+      c[subjectOf(q)]++;
+    });
+    return c;
+  }, [questions, subjects, filter]);
+
+  const visible = useMemo(
+    () =>
+      questions.filter(
+        (q) => matchesStatus(q, filter) && matchesSubject(q, subject)
+      ),
+    [questions, filter, subject]
+  );
 
   return (
     <div className="space-y-6">
       {/* Filters + language */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {FILTERS.map((f) => (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`px-4 py-2 rounded-2xl text-sm font-medium border transition ${
+                  filter === f.key
+                    ? "bg-black text-white border-black"
+                    : "border-gray-300 text-gray-700 hover:border-black"
+                }`}
+              >
+                {f.label}
+                <span className="ml-2 opacity-70">{counts[f.key]}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Language toggle */}
+          <div className="flex items-center rounded-xl border border-gray-300 overflow-hidden">
             <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`px-4 py-2 rounded-2xl text-sm font-medium border transition ${
-                filter === f.key
-                  ? "bg-black text-white border-black"
-                  : "border-gray-300 text-gray-700 hover:border-black"
+              onClick={() => changeLang("en")}
+              className={`px-3 py-2 text-sm font-medium transition ${
+                lang === "en"
+                  ? "bg-black text-white"
+                  : "bg-white text-gray-600 hover:text-black"
               }`}
             >
-              {f.label}
-              <span className="ml-2 opacity-70">{counts[f.key]}</span>
+              English
             </button>
-          ))}
+            <button
+              onClick={() => changeLang("hi")}
+              className={`px-3 py-2 text-sm font-medium transition ${
+                lang === "hi"
+                  ? "bg-black text-white"
+                  : "bg-white text-gray-600 hover:text-black"
+              }`}
+            >
+              हिंदी
+            </button>
+          </div>
         </div>
 
-        {/* Language toggle */}
-        <div className="flex items-center rounded-xl border border-gray-300 overflow-hidden">
-          <button
-            onClick={() => changeLang("en")}
-            className={`px-3 py-2 text-sm font-medium transition ${
-              lang === "en"
-                ? "bg-black text-white"
-                : "bg-white text-gray-600 hover:text-black"
-            }`}
-          >
-            English
-          </button>
-          <button
-            onClick={() => changeLang("hi")}
-            className={`px-3 py-2 text-sm font-medium transition ${
-              lang === "hi"
-                ? "bg-black text-white"
-                : "bg-white text-gray-600 hover:text-black"
-            }`}
-          >
-            हिंदी
-          </button>
-        </div>
+        {/* Subject row — pointless when the paper has only one subject */}
+        {subjects.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 mr-1">
+              Subject
+            </span>
+            {[ALL, ...subjects].map((s) => (
+              <button
+                key={s}
+                onClick={() => setSubject(s)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
+                  subject === s
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "border-gray-300 text-gray-600 hover:border-gray-900"
+                } ${
+                  subjectCounts[s] === 0 && subject !== s ? "opacity-40" : ""
+                }`}
+              >
+                {s === ALL ? "All Subjects" : s}
+                <span className="ml-2 opacity-70">{subjectCounts[s]}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {visible.length === 0 ? (
         <div className="bg-white border rounded-3xl p-10 text-center text-gray-500">
-          No questions in this filter.
+          No questions match these filters.
         </div>
       ) : (
         visible.map((q) => {
