@@ -93,6 +93,14 @@ function SolutionsPanel({ questions }) {
     () => localStorage.getItem("testLang") || "en"
   );
   const [bookmarked, setBookmarked] = useState(() => new Set());
+  const [bmNotice, setBmNotice] = useState("");
+
+  // hide the bookmark-lock message after a few seconds
+  useEffect(() => {
+    if (!bmNotice) return;
+    const id = setTimeout(() => setBmNotice(""), 5000);
+    return () => clearTimeout(id);
+  }, [bmNotice]);
 
   const changeLang = (next) => {
     setLang(next);
@@ -124,8 +132,12 @@ function SolutionsPanel({ questions }) {
         else n.delete(key);
         return n;
       });
-    } catch {
+    } catch (err) {
       setBookmarked(flip); // revert
+      // bookmark lock: the question is in the custom practice set
+      if (err.response?.status === 409) {
+        setBmNotice(err.response.data?.message || "");
+      }
     }
   };
 
@@ -174,6 +186,13 @@ function SolutionsPanel({ questions }) {
 
   return (
     <div className="space-y-6">
+      {/* Bookmark lock message (question is in the custom practice set) */}
+      {bmNotice && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg max-w-md text-center">
+          {bmNotice}
+        </div>
+      )}
+
       {/* Filters + language */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -63,9 +63,36 @@ const paletteBg = (resp, isCurrent) => {
   return `${base}${ring} bg-orange-400 text-white border-orange-400`;
 };
 
-function AttemptPage() {
+// Default server calls for ranked / practice attempts — exactly the calls this
+// screen has always made. A custom practice set passes its own `service` with
+// the same function names (see customAttemptService in test.service.js).
+const rankedPracticeService = (attemptId) => ({
+  getState: () => getAttemptState(attemptId),
+  saveAnswer: (payload) => saveAnswer(payload),
+  submit: () => submitSection(attemptId),
+  pause: (remainingSeconds) => pauseAttempt(attemptId, remainingSeconds),
+  resume: () => resumeAttempt(attemptId),
+  syncTimer: (remainingSeconds) => syncTimer(attemptId, remainingSeconds),
+  timerUrl: "http://localhost:5000/api/student/attempt/timer",
+  resultPath: `/result/${attemptId}`,
+  leavePath: "/dashboard",
+});
+
+const ATTEMPT_LABEL = {
+  ranked: { short: "Ranked", long: "Ranked Attempt" },
+  practice: { short: "Practice", long: "Practice (not ranked)" },
+  custom: { short: "Custom Practice", long: "Custom Practice (no marks)" },
+};
+
+function AttemptPage({ service } = {}) {
   const { attemptId } = useParams();
   const navigate = useNavigate();
+
+  const svc = useMemo(
+    () => service || rankedPracticeService(attemptId),
+    [service, attemptId]
+  );
+  const isCustom = Boolean(service);
 
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -113,11 +140,11 @@ function AttemptPage() {
   useEffect(() => {
     const fetchAttempt = async () => {
       try {
-        const data = await getAttemptState(attemptId);
+        const data = await svc.getState();
 
         // already finished → straight to result
         if (data.status === "completed") {
-          navigate(`/result/${attemptId}`, { replace: true });
+          navigate(svc.resultPath, { replace: true });
           return;
         }
 
@@ -163,7 +190,7 @@ function AttemptPage() {
     };
 
     fetchAttempt();
-  }, [attemptId, navigate]);
+  }, [svc, navigate]);
 
   // =========================
   // LEAVE GUARDS (back button / tab close)
@@ -200,7 +227,7 @@ function AttemptPage() {
       if (s == null) return;
       try {
         const token = localStorage.getItem("token");
-        fetch("http://localhost:5000/api/student/attempt/timer", {
+        fetch(svc.timerUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -215,7 +242,7 @@ function AttemptPage() {
     };
     window.addEventListener("pagehide", persistOnHide);
     return () => window.removeEventListener("pagehide", persistOnHide);
-  }, [attemptId]);
+  }, [svc, attemptId]);
 
   // =========================
   // DERIVED
@@ -300,11 +327,11 @@ function AttemptPage() {
     if (paused) return;
     const id = setInterval(() => {
       if (secondsLeftRef.current != null) {
-        syncTimer(attemptId, secondsLeftRef.current).catch(() => {});
+        svc.syncTimer(secondsLeftRef.current).catch(() => {});
       }
     }, 10000);
     return () => clearInterval(id);
-  }, [paused, attemptId]);
+  }, [paused, svc]);
 
   // auto-submit when section time runs out
   useEffect(() => {
@@ -355,14 +382,14 @@ function AttemptPage() {
         saveType,
       };
 
-      await saveAnswer(payload);
+      await svc.saveAnswer(payload);
 
       setResponses((prev) => ({
         ...prev,
         [qid]: { selectedOption, answerStatus, markedForReview },
       }));
     },
-    [attemptId, currentQuestion, responses]
+    [svc, attemptId, currentQuestion, responses]
   );
 
   // =========================
@@ -384,7 +411,7 @@ function AttemptPage() {
 
     // Persist immediately (no navigation) so an accidental tab close / back
     // still keeps this selection. Position (currentQuestionId) is unchanged.
-    saveAnswer({
+    svc.saveAnswer({
       attemptId,
       questionId: currentQuestion.questionId,
       questionNumber: currentQuestion.questionNumber,
@@ -477,12 +504,12 @@ function AttemptPage() {
       // save whatever is selected on the current question first
       await persistCurrent(undefined, "direct_navigation").catch(() => {});
 
-      const res = await submitSection(attemptId);
+      const res = await svc.submit(secondsLeftRef.current);
 
       const status = res?.attempt?.status;
 
       if (status === "completed") {
-        navigate(`/result/${attemptId}`, { replace: true });
+        navigate(svc.resultPath, { replace: true });
         return;
       }
 
@@ -508,7 +535,7 @@ function AttemptPage() {
       setSaving(true);
       // save the current selection/time before freezing the clock
       await persistCurrent(undefined, "direct_navigation").catch(() => {});
-      await pauseAttempt(attemptId, secondsLeft);
+      await svc.pause(secondsLeft);
       setPaused(true);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to pause");
@@ -520,7 +547,7 @@ function AttemptPage() {
   const handleResume = async () => {
     try {
       setSaving(true);
-      const res = await resumeAttempt(attemptId);
+      const res = await svc.resume();
       if (res?.currentSectionRemainingSeconds != null) {
         setSecondsLeft(res.currentSectionRemainingSeconds);
       }
@@ -539,8 +566,8 @@ function AttemptPage() {
     try {
       setSaving(true);
       await persistCurrent(undefined, "direct_navigation").catch(() => {});
-      if (!paused) await pauseAttempt(attemptId, secondsLeft).catch(() => {});
-      navigate("/dashboard");
+      if (!paused) await svc.pause(secondsLeft).catch(() => {});
+      navigate(svc.leavePath);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to leave");
       setSaving(false);
@@ -597,7 +624,7 @@ function AttemptPage() {
               {attempt?.attemptType && (
                 <>
                   {" · "}
-                  {attempt.attemptType === "ranked" ? "Ranked" : "Practice"}
+                  {(ATTEMPT_LABEL[attempt.attemptType] || ATTEMPT_LABEL.practice).short}
                 </>
               )}
             </p>
@@ -701,7 +728,8 @@ function AttemptPage() {
             </p>
             {secondsLeft !== null && (
               <p className="text-gray-800 font-semibold mt-4 tabular-nums">
-                Time left in this section: {formatClock(secondsLeft)}
+                {isCustom ? "Time left" : "Time left in this section"}:{" "}
+                {formatClock(secondsLeft)}
               </p>
             )}
             <button
@@ -792,9 +820,7 @@ function AttemptPage() {
               {attempt?.attemptType && (
                 <>
                   <span className="text-gray-300"> · </span>
-                  {attempt.attemptType === "ranked"
-                    ? "Ranked Attempt"
-                    : "Practice (not ranked)"}
+                  {(ATTEMPT_LABEL[attempt.attemptType] || ATTEMPT_LABEL.practice).long}
                 </>
               )}
             </p>

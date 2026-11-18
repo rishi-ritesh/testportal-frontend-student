@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { getBookmarks, toggleBookmark } from "../../services/test.service";
 import { drawMathInHtml } from "../../lib/math";
@@ -14,6 +15,7 @@ function BookmarksPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [lang, setLang] = useState(
     () => localStorage.getItem("testLang") || "en"
   );
@@ -33,13 +35,18 @@ function BookmarksPage() {
   }, []);
 
   const removeBookmark = async (questionId) => {
+    setNotice("");
     // optimistic remove
     const prev = items;
     setItems((list) => list.filter((q) => String(q.questionId) !== String(questionId)));
     try {
       await toggleBookmark(questionId);
-    } catch {
+    } catch (err) {
       setItems(prev); // revert
+      // bookmark lock: the question is in the custom practice set
+      setNotice(
+        err.response?.data?.message || "Couldn't remove the bookmark. Please try again."
+      );
     }
   };
 
@@ -86,6 +93,30 @@ function BookmarksPage() {
         </div>
       </section>
 
+      {/* ================= CUSTOM SET SHORTCUT ================= */}
+      <Link
+        to="/custom-set"
+        className="flex items-center justify-between gap-4 bg-indigo-50 border border-indigo-200 rounded-3xl px-6 py-4 hover:bg-indigo-100 transition"
+      >
+        <div>
+          <p className="font-semibold text-indigo-900">🎯 Practise these as a timed test</p>
+          <p className="text-sm text-indigo-700">
+            Build your custom practice set ({items.filter((q) => q.inCustomSet).length} of your
+            bookmarks are in it).
+          </p>
+        </div>
+        <span className="text-indigo-700 font-semibold">Open →</span>
+      </Link>
+
+      {notice && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-3 text-sm flex items-center justify-between gap-4">
+          <span>{notice}</span>
+          <Link to="/custom-set" className="font-semibold underline shrink-0">
+            Go to custom set
+          </Link>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-3xl p-10 text-center text-gray-500">
           You haven't bookmarked any questions yet. Open a completed test's
@@ -103,11 +134,20 @@ function BookmarksPage() {
                 {[q.subjectName, q.topicName, q.questionCode]
                   .filter(Boolean)
                   .join(" · ")}
+                {q.inCustomSet && (
+                  <span className="ml-2 text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-lg">
+                    In custom set
+                  </span>
+                )}
               </p>
 
               <button
                 onClick={() => removeBookmark(q.questionId)}
-                title="Remove bookmark"
+                title={
+                  q.inCustomSet
+                    ? "In your custom set — remove it from the set first"
+                    : "Remove bookmark"
+                }
                 className="shrink-0 text-xl leading-none text-amber-500 hover:text-red-500 transition"
               >
                 ★

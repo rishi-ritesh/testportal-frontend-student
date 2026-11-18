@@ -17,6 +17,9 @@ import PackageDetailPage from "../pages/packages/PackageDetailPage";
 import BookmarksPage from "../pages/bookmarks/BookmarksPage";
 import SeriesPage from "../pages/series/SeriesPage";
 import AttemptsPage from "../pages/attempts/AttemptsPage";
+import CustomSetPage from "../pages/customSet/CustomSetPage";
+import CustomResultPage from "../pages/customSet/CustomResultPage";
+import { customAttemptService } from "../services/test.service";
 
 function AppRoutes() {
     return (
@@ -45,6 +48,18 @@ function AppRoutes() {
                     <ProtectedRoute>
                         <div className="min-h-screen bg-gray-100 p-6">
                             <AttemptPage />
+                        </div>
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Custom practice set — same test screen, custom server calls */}
+            <Route
+                path="/custom-set/attempt"
+                element={
+                    <ProtectedRoute>
+                        <div className="min-h-screen bg-gray-100 p-6">
+                            <AttemptPage service={customAttemptService} />
                         </div>
                     </ProtectedRoute>
                 }
@@ -79,6 +94,16 @@ function AppRoutes() {
                     element={<BookmarksPage />}
                 />
 
+                {/* Custom practice set */}
+                <Route
+                    path="/custom-set"
+                    element={<CustomSetPage />}
+                />
+                <Route
+                    path="/custom-set/result"
+                    element={<CustomResultPage />}
+                />
+
                 {/* Test Series (Packages) */}
                 <Route
                     path="/packages/:id"
@@ -108,4 +133,4 @@ function AppRoutes() {
     );
 }
 
-export default AppRoutes;
+export default AppRoutes;

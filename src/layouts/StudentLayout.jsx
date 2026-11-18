@@ -46,6 +46,9 @@ function StudentLayout() {
             <NavLink to="/bookmarks" className={navClass}>
               Bookmarks
             </NavLink>
+            <NavLink to="/custom-set" className={navClass}>
+              Custom Set
+            </NavLink>
           </nav>
         </div>
 
