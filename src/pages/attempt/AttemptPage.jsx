@@ -18,10 +18,16 @@ import {
   pauseAttempt,
   resumeAttempt,
   syncTimer,
+  registerAttemptSession,
 } from "../../services/test.service";
 import api from "../../api/axios";
 
 import { drawMathInHtml } from "../../lib/math";
+import {
+  createSaveQueue,
+  isNetworkError,
+  isOtherSessionError,
+} from "../../lib/saveQueue";
 
 // =========================
 // HELPERS
@@ -64,20 +70,82 @@ const paletteBg = (resp, isCurrent) => {
   return `${base}${ring} bg-orange-400 text-white border-orange-400`;
 };
 
-// Default server calls for ranked / practice attempts — exactly the calls this
-// screen has always made. A custom practice set passes its own `service` with
-// the same function names (see customAttemptService in test.service.js).
+// One id per open test screen (see "one open screen per attempt").
+const newSessionId = () => {
+  try {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  } catch {
+    /* not available on plain http — fall back below */
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+};
+
+// Server answers, with this device's unsent saves laid on top (they are newer).
+const mergeResponses = (answers, pending) => {
+  const restored = {};
+  (answers || []).forEach((a) => {
+    restored[String(a.questionId)] = {
+      selectedOption: a.selectedOption,
+      answerStatus: a.answerStatus,
+      markedForReview: Boolean(a.markedForReview),
+    };
+  });
+  (pending || []).forEach((item) => {
+    if (item.timeOnly) return;
+    const p = item.payload;
+    restored[String(p.questionId)] = {
+      selectedOption: p.selectedOption ?? null,
+      answerStatus: p.answerStatus,
+      markedForReview: Boolean(p.markedForReview),
+    };
+  });
+  return restored;
+};
+
+// A time-only save: seconds spent on a question, nothing else changes.
+const timePayload = (attemptId, question, seconds) => ({
+  attemptId,
+  questionId: question.questionId,
+  questionNumber: question.questionNumber,
+  fromQuestionNumber: question.questionNumber,
+  timeSpent: seconds,
+  saveType: "timer",
+});
+
+// Resolves when the browser is back online, or after `ms`.
+const waitForOnline = (ms) =>
+  new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      window.removeEventListener("online", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    window.addEventListener("online", done);
+  });
+
+const NET_ERROR_TEXT =
+  "Can't reach the server. Your answers are kept on this device; please check your internet.";
+const OFFLINE_TEXT = "Offline – answers will be saved when you're back online";
+const CONFLICT_TEXT = "This test was opened in another tab or device. Continue here?";
+
+// Default server calls for ranked / practice attempts — the calls this screen
+// has always made. A custom practice set passes its own `service` with the
+// same function names (see customAttemptService in test.service.js).
 const rankedPracticeService = (attemptId) => ({
   getState: () => getAttemptState(attemptId),
+  registerSession: (sessionId, takeover) =>
+    registerAttemptSession(attemptId, sessionId, takeover),
   saveAnswer: (payload) => saveAnswer(payload),
-  submit: () => submitSection(attemptId),
-  pause: (remainingSeconds) => pauseAttempt(attemptId, remainingSeconds),
-  resume: () => resumeAttempt(attemptId),
-  syncTimer: (remainingSeconds) => syncTimer(attemptId, remainingSeconds),
+  submit: (remainingSeconds, extra) => submitSection(attemptId, extra),
+  pause: (remainingSeconds, extra) => pauseAttempt(attemptId, remainingSeconds, extra),
+  resume: (extra) => resumeAttempt(attemptId, extra),
+  syncTimer: (remainingSeconds, extra) => syncTimer(attemptId, remainingSeconds, extra),
   // same API base URL as every other call (custom mode does the same)
   timerUrl: `${api.defaults.baseURL}/api/student/attempt/timer`,
+  saveUrl: `${api.defaults.baseURL}/api/student/attempt/save-answer`,
   resultPath: `/result/${attemptId}`,
-  leavePath: "/dashboard",
+  leavePath: "/attempts",
 });
 
 const ATTEMPT_LABEL = {
@@ -95,10 +163,13 @@ function AttemptPage({ service } = {}) {
     [service, attemptId]
   );
   const isCustom = Boolean(service);
+  // where this tab keeps its screen id across a reload
+  const sessionKey = `testSession:${attemptId || "custom"}`;
 
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // busy with pause / resume / exit / submit
   const [saving, setSaving] = useState(false);
 
   // Position
@@ -116,6 +187,16 @@ function AttemptPage({ service } = {}) {
   // phones: the slide-up question list
   const [showPalette, setShowPalette] = useState(false);
 
+  // saving status
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [queueState, setQueueState] = useState({ pending: 0, sending: false });
+  // { retry } — "Can't reach the server" card
+  const [netError, setNetError] = useState(null);
+  // null | "open" (another screen is live) | "lost" (another screen took over)
+  const [conflict, setConflict] = useState(null);
+  // null | message while time is up and the section is being submitted
+  const [timeUp, setTimeUp] = useState(null);
+
   // question language ("en" | "hi") — remembered across questions & reloads
   const [lang, setLang] = useState(
     () => localStorage.getItem("testLang") || "en"
@@ -131,77 +212,267 @@ function AttemptPage({ service } = {}) {
   // latest secondsLeft, readable inside intervals / unload without stale closures
   const secondsLeftRef = useRef(null);
 
-  // time tracking per question (epoch ms)
-  const questionStartRef = useRef(Date.now());
+  // per-question time: when counting started (epoch ms); null = not counting
+  // (paused, tab hidden, test frozen)
+  const questionStartRef = useRef(null);
 
   // guards against double auto-submit
   const autoSubmitRef = useRef(false);
 
+  // the save queue, this screen's session id, and the latest values that
+  // event handlers / intervals need
+  const queueRef = useRef(null);
+  const sessionIdRef = useRef(null);
+  const loadIdRef = useRef(0);
+  const frozenRef = useRef(true);
+  const conflictRef = useRef(null);
+  const sectionIndexRef = useRef(0);
+  const currentQuestionRef = useRef(null);
+  const leftRef = useRef(false);
+
   // =========================
-  // FETCH ATTEMPT
+  // DERIVED
   // =========================
 
+  const sections = useMemo(
+    () => attempt?.testSnapshot?.sections || [],
+    [attempt]
+  );
+  const currentSection = sections[sectionIndex];
+  const sectionQuestions = currentSection?.questions || [];
+  const currentQuestion = sectionQuestions[questionIndex];
+
+  const totalQuestions = useMemo(
+    () =>
+      sections.reduce(
+        (sum, s) => sum + (s.questions?.length || 0),
+        0
+      ),
+    [sections]
+  );
+
+  // clock and per-question time stop while paused, while another screen owns
+  // the test, and while time is up
+  const frozen = paused || Boolean(conflict) || Boolean(timeUp) || loading;
+
   useEffect(() => {
-    const fetchAttempt = async () => {
+    frozenRef.current = frozen;
+    if (frozen) {
+      questionStartRef.current = null;
+    } else if (questionStartRef.current == null && !document.hidden) {
+      questionStartRef.current = Date.now();
+    }
+  }, [frozen]);
+
+  useEffect(() => {
+    conflictRef.current = conflict;
+  }, [conflict]);
+
+  useEffect(() => {
+    sectionIndexRef.current = sectionIndex;
+    currentQuestionRef.current = currentQuestion || null;
+  }, [sectionIndex, currentQuestion]);
+
+  // =========================
+  // PER-QUESTION TIME
+  // =========================
+
+  // Whole seconds on the current question since the last time they were
+  // taken. The part-second stays for next time, so no second is counted twice.
+  const takeQuestionSeconds = useCallback(() => {
+    const start = questionStartRef.current;
+    if (start == null) return 0;
+    const s = Math.max(0, Math.floor((Date.now() - start) / 1000));
+    questionStartRef.current = start + s * 1000;
+    return s;
+  }, []);
+
+  // new question on screen → start counting it
+  useEffect(() => {
+    questionStartRef.current =
+      frozenRef.current || document.hidden ? null : Date.now();
+  }, [sectionIndex, questionIndex]);
+
+  // =========================
+  // LOAD / OPEN THE TEST SCREEN
+  // =========================
+
+  const applyState = useCallback((data, pending) => {
+    setAttempt(data);
+
+    // resume at the section AND question the student left off on
+    const secIdx = data.currentSectionIndex || 0;
+    setSectionIndex(secIdx);
+
+    const secQuestions =
+      data.testSnapshot?.sections?.[secIdx]?.questions || [];
+    const qIdx = secQuestions.findIndex(
+      (q) => String(q.questionId) === String(data.currentQuestionId)
+    );
+    setQuestionIndex(qIdx >= 0 ? qIdx : 0);
+
+    // restore responses (unsent saves on this device win)
+    setResponses(mergeResponses(data.answers, pending));
+
+    durationsRef.current = data.sectionDurations || [];
+
+    // continue the section clock from where the server says it is
+    resumeRemainingRef.current = {
+      index: secIdx,
+      seconds: data.currentSectionRemainingSeconds,
+    };
+    if (data.currentSectionRemainingSeconds != null) {
+      setSecondsLeft(data.currentSectionRemainingSeconds);
+    }
+    setPaused(Boolean(data.paused));
+  }, []);
+
+  const finishAndShowResult = useCallback(() => {
+    leftRef.current = true;
+    questionStartRef.current = null;
+    queueRef.current?.clear();
+    navigate(svc.resultPath, { replace: true });
+  }, [navigate, svc]);
+
+  // Opens the screen: load state, register this screen (or take over), send
+  // anything this device didn't manage to save last time, THEN trust the
+  // server state.
+  const openScreen = useCallback(
+    async (takeover = false) => {
+      const myLoad = ++loadIdRef.current;
+      const stale = () => myLoad !== loadIdRef.current;
+
+      // This screen's id. A reload in the same tab keeps it (handed over via
+      // sessionStorage on pagehide), so a reload is never mistaken for a second
+      // tab. It is taken out of sessionStorage at once, so a duplicated tab or
+      // a crashed page can't reuse it.
+      if (takeover) {
+        sessionIdRef.current = newSessionId();
+      } else if (!sessionIdRef.current) {
+        try {
+          sessionIdRef.current = sessionStorage.getItem(sessionKey);
+          sessionStorage.removeItem(sessionKey);
+        } catch {
+          /* storage unavailable */
+        }
+        if (!sessionIdRef.current) sessionIdRef.current = newSessionId();
+      }
+
       try {
-        const data = await svc.getState();
+        let data = await svc.getState();
+        if (stale()) return;
 
         // already finished → straight to result
         if (data.status === "completed") {
-          navigate(svc.resultPath, { replace: true });
+          finishAndShowResult();
           return;
         }
 
-        setAttempt(data);
+        // one save queue per attempt, kept on this device
+        const key = isCustom
+          ? `testSaveQueue:custom:${data.startedAt}`
+          : `testSaveQueue:${attemptId}`;
+        if (!queueRef.current || queueRef.current.storageKey !== key) {
+          queueRef.current?.destroy();
+          queueRef.current = createSaveQueue({
+            storageKey: key,
+            send: (item) =>
+              svc.saveAnswer({
+                ...item.payload,
+                seq: item.seq,
+                sessionId: sessionIdRef.current,
+              }),
+            onChange: (s) => setQueueState({ pending: s.pending, sending: s.sending }),
+            onConflict: () => setConflict("lost"),
+          });
+        }
+        const queue = queueRef.current;
 
-        // resume at the section AND question the student left off on
-        const secIdx = data.currentSectionIndex || 0;
-        setSectionIndex(secIdx);
+        // register this screen as the one that owns the test
+        try {
+          const reg = await svc.registerSession(sessionIdRef.current, takeover);
+          if (stale()) return;
+          queue.setMinSeq(reg?.maxSeq || 0);
+        } catch (err) {
+          if (stale()) return;
+          if (isOtherSessionError(err)) {
+            queue.stop();
+            applyState(data, queue.pending());
+            setConflict("open");
+            return;
+          }
+          // offline / server busy: carry on — saves retry on their own
+        }
+        setConflict(null);
+        queue.resume();
 
-        const secQuestions =
-          data.testSnapshot?.sections?.[secIdx]?.questions || [];
-        const qIdx = secQuestions.findIndex(
-          (q) => String(q.questionId) === String(data.currentQuestionId)
-        );
-        setQuestionIndex(qIdx >= 0 ? qIdx : 0);
+        // unsent saves from last time go first, then the server is trusted
+        if (queue.pending().length) {
+          const flushed = await queue.flush(navigator.onLine ? 8000 : 1000);
+          if (stale()) return;
+          if (flushed) {
+            data = await svc.getState();
+            if (stale()) return;
+            if (data.status === "completed") {
+              finishAndShowResult();
+              return;
+            }
+          }
+        }
 
-        // restore responses
-        const restored = {};
-        (data.answers || []).forEach((a) => {
-          restored[String(a.questionId)] = {
-            selectedOption: a.selectedOption,
-            answerStatus: a.answerStatus,
-            markedForReview: Boolean(a.markedForReview),
-          };
-        });
-        setResponses(restored);
-
-        durationsRef.current = data.sectionDurations || [];
-
-        // continue the section clock from where the server says it is
-        resumeRemainingRef.current = {
-          index: data.currentSectionIndex || 0,
-          seconds: data.currentSectionRemainingSeconds,
-        };
-        setPaused(Boolean(data.paused));
+        applyState(data, queue.pending());
       } catch (err) {
+        if (stale()) return;
         setError(
           err.response?.data?.message || "Failed to load attempt"
         );
       } finally {
-        setLoading(false);
+        if (!stale()) setLoading(false);
       }
-    };
+    },
+    [svc, isCustom, attemptId, sessionKey, applyState, finishAndShowResult]
+  );
 
-    fetchAttempt();
-  }, [svc, navigate]);
+  useEffect(() => {
+    openScreen(false);
+    return () => {
+      loadIdRef.current += 1; // ignore a load that finishes after unmount
+    };
+  }, [openScreen]);
+
+  // Back on the tab: other screens / devices may have changed things.
+  const refreshFromServer = useCallback(async () => {
+    const queue = queueRef.current;
+    if (!queue || conflictRef.current) return;
+    try {
+      const data = await svc.getState();
+      if (data.status === "completed") {
+        finishAndShowResult();
+        return;
+      }
+      const pending = queue.pending();
+      if ((data.currentSectionIndex || 0) !== sectionIndexRef.current) {
+        applyState(data, pending);
+        return;
+      }
+      setResponses(mergeResponses(data.answers, pending));
+      setPaused(Boolean(data.paused));
+      const server = data.currentSectionRemainingSeconds;
+      if (server != null) {
+        // the clock never goes up
+        setSecondsLeft((prev) => (prev == null ? server : Math.min(prev, server)));
+      }
+    } catch {
+      /* offline — keep what we have */
+    }
+  }, [svc, applyState, finishAndShowResult]);
 
   // =========================
   // LEAVE GUARDS (back button / tab close)
   // =========================
 
   // Trap the browser Back button: instead of leaving the test (or landing on
-  // the instructions page), re-pin history and show the "pause & go back" card.
+  // the instructions page), re-pin history and show the "Save & Exit" card.
   useEffect(() => {
     window.history.pushState(null, "", window.location.href);
     const onPopState = () => {
@@ -232,57 +503,124 @@ function AttemptPage({ service } = {}) {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
-  // Best-effort save of the timer when the tab is actually closing, so the
-  // countdown resumes from exactly here. fetch(keepalive) can carry the auth
-  // header and survive unload (sendBeacon can't set Authorization).
-  useEffect(() => {
-    const persistOnHide = () => {
+  // Best-effort save when the tab is hidden or closing: the section timer AND
+  // the seconds on the current question, by fetch(keepalive) — it can carry
+  // the auth header and survives the page going away (sendBeacon can't set
+  // Authorization). `release` (tab closing) frees this screen's claim on the
+  // test so reopening it doesn't ask "Continue here?".
+  const saveOnLeave = useCallback(
+    (release) => {
+      if (conflictRef.current || !sessionIdRef.current) return;
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+
       const s = secondsLeftRef.current;
-      if (s == null) return;
       try {
-        const token = localStorage.getItem("token");
         fetch(svc.timerUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ attemptId, remainingSeconds: s }),
+          headers,
+          body: JSON.stringify({
+            attemptId,
+            remainingSeconds: s ?? undefined,
+            sessionId: sessionIdRef.current,
+            release,
+          }),
           keepalive: true,
-        });
+        }).catch(() => {});
       } catch {
         /* ignore */
       }
-    };
-    window.addEventListener("pagehide", persistOnHide);
-    return () => window.removeEventListener("pagehide", persistOnHide);
-  }, [svc, attemptId]);
 
-  // =========================
-  // DERIVED
-  // =========================
-
-  const sections = attempt?.testSnapshot?.sections || [];
-  const currentSection = sections[sectionIndex];
-  const sectionQuestions = currentSection?.questions || [];
-  const currentQuestion = sectionQuestions[questionIndex];
-
-  const totalQuestions = useMemo(
-    () =>
-      sections.reduce(
-        (sum, s) => sum + (s.questions?.length || 0),
-        0
-      ),
-    [sections]
+      const q = currentQuestionRef.current;
+      const secs = takeQuestionSeconds();
+      if (q && secs > 0 && queueRef.current) {
+        // also queued (and kept on this device); the server ignores the
+        // second copy by its sequence number
+        const item = queueRef.current.enqueueBeacon(
+          String(q.questionId),
+          timePayload(attemptId, q, secs)
+        );
+        try {
+          fetch(svc.saveUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              ...item.payload,
+              seq: item.seq,
+              sessionId: sessionIdRef.current,
+            }),
+            keepalive: true,
+          }).catch(() => {});
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [svc, attemptId, takeQuestionSeconds]
   );
 
-  // =========================
-  // QUESTION TIMER RESET
-  // =========================
-
   useEffect(() => {
-    questionStartRef.current = Date.now();
-  }, [sectionIndex, questionIndex]);
+    const onPageHide = () => {
+      // hand this screen's id to the page that loads next in this tab (reload)
+      if (sessionIdRef.current && !conflictRef.current && !leftRef.current) {
+        try {
+          sessionStorage.setItem(sessionKey, sessionIdRef.current);
+        } catch {
+          /* ignore */
+        }
+      }
+      saveOnLeave(true);
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [saveOnLeave, sessionKey]);
+
+  // Tab hidden → save now. Visible again → reload state and resync the clock.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        if (!frozenRef.current) saveOnLeave(false);
+        questionStartRef.current = null;
+      } else {
+        if (!frozenRef.current) questionStartRef.current = Date.now();
+        refreshFromServer();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [saveOnLeave, refreshFromServer]);
+
+  // Leaving the screen inside the app (exit, result): free this screen's claim
+  // on the test and stop the queue's timers. Unsent saves stay on the device.
+  const saveOnLeaveRef = useRef(saveOnLeave);
+  useEffect(() => {
+    saveOnLeaveRef.current = saveOnLeave;
+  }, [saveOnLeave]);
+  useEffect(
+    () => () => {
+      saveOnLeaveRef.current(true);
+      queueRef.current?.destroy();
+    },
+    []
+  );
+
+  // online / offline
+  useEffect(() => {
+    const up = () => {
+      setOnline(true);
+      queueRef.current?.retryNow();
+    };
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
 
   // =========================
   // SECTION COUNTDOWN
@@ -316,7 +654,7 @@ function AttemptPage({ service } = {}) {
   // ticker. It clamps at 0 (no-op) and resumes decrementing when the next
   // section seeds a fresh time. Pausing clears it (cleanup); resuming re-creates it.
   useEffect(() => {
-    if (paused) return;
+    if (frozen) return;
 
     const id = setInterval(() => {
       setSecondsLeft((prev) => {
@@ -327,92 +665,122 @@ function AttemptPage({ service } = {}) {
     }, 1000);
 
     return () => clearInterval(id);
-  }, [paused]);
+  }, [frozen]);
 
   // keep a ref of the latest secondsLeft for intervals / unload handlers
   useEffect(() => {
     secondsLeftRef.current = secondsLeft;
   }, [secondsLeft]);
 
-  // Heartbeat: save the remaining time every 10s while running, so a refresh /
-  // power cut / accident resumes from roughly here. The client owns the clock;
-  // the server just stores the last reported value.
+  // Heartbeat every 10s while running: save the remaining time (so a refresh /
+  // power cut resumes from roughly here) and the seconds spent on the current
+  // question since the last save (so a crash loses at most ~10 s of it).
   useEffect(() => {
-    if (paused) return;
+    if (frozen) return;
     const id = setInterval(() => {
-      if (secondsLeftRef.current != null) {
-        svc.syncTimer(secondsLeftRef.current).catch(() => {});
+      svc
+        .syncTimer(secondsLeftRef.current ?? undefined, { sessionId: sessionIdRef.current })
+        .catch((err) => {
+          if (isOtherSessionError(err)) setConflict("lost");
+        });
+      if (!document.hidden) {
+        const q = currentQuestionRef.current;
+        const secs = takeQuestionSeconds();
+        if (q && secs > 0) {
+          queueRef.current?.enqueue(
+            String(q.questionId),
+            timePayload(attemptId, q, secs),
+            { timeOnly: true }
+          );
+        }
       }
     }, 10000);
     return () => clearInterval(id);
-  }, [paused, svc]);
+  }, [frozen, svc, attemptId, takeQuestionSeconds]);
 
   // auto-submit when section time runs out
   useEffect(() => {
-    if (secondsLeft === 0 && !autoSubmitRef.current && !loading && !paused) {
+    if (secondsLeft === 0 && !autoSubmitRef.current && !loading && !paused && !conflict) {
       autoSubmitRef.current = true;
-      handleSubmitSection();
+      handleTimeUp();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsLeft]);
 
   // =========================
-  // PERSIST CURRENT QUESTION
+  // SAVING
   // =========================
 
-  const secondsOnQuestion = () =>
-    Math.max(0, Math.floor((Date.now() - questionStartRef.current) / 1000));
-
+  // Queue a save of the current question (its answer, mark and the seconds
+  // spent on it since the last save). Nothing waits for the network.
   // opts: { cleared?: boolean, marked?: boolean }
-  const persistCurrent = useCallback(
-    async (toQuestionNumber, saveType, opts = {}) => {
-      if (!currentQuestion) return;
+  const persistCurrent = (toQuestionNumber, saveType, opts = {}) => {
+    if (!currentQuestion || !queueRef.current) return;
 
-      const qid = String(currentQuestion.questionId);
-      const resp = responses[qid] || {};
+    const qid = String(currentQuestion.questionId);
+    const resp = responses[qid] || {};
 
-      const selectedOption = opts.cleared
-        ? null
-        : resp.selectedOption ?? null;
+    const selectedOption = opts.cleared
+      ? null
+      : resp.selectedOption ?? null;
 
-      // explicit override wins, otherwise preserve existing marked flag
-      const markedForReview =
-        opts.marked != null
-          ? opts.marked
-          : Boolean(resp.markedForReview);
+    // explicit override wins, otherwise preserve existing marked flag
+    const markedForReview =
+      opts.marked != null
+        ? opts.marked
+        : Boolean(resp.markedForReview);
 
-      const answerStatus = selectedOption ? "answered" : "skipped";
+    const answerStatus = selectedOption ? "answered" : "skipped";
 
-      const payload = {
-        attemptId,
-        questionId: currentQuestion.questionId,
-        questionNumber: currentQuestion.questionNumber,
-        selectedOption,
-        answerStatus,
-        markedForReview,
-        timeSpent: secondsOnQuestion(),
-        fromQuestionNumber: currentQuestion.questionNumber,
-        toQuestionNumber,
-        saveType,
-      };
+    queueRef.current.enqueue(qid, {
+      attemptId,
+      questionId: currentQuestion.questionId,
+      questionNumber: currentQuestion.questionNumber,
+      selectedOption,
+      answerStatus,
+      markedForReview,
+      timeSpent: takeQuestionSeconds(),
+      fromQuestionNumber: currentQuestion.questionNumber,
+      toQuestionNumber,
+      saveType,
+    });
 
-      await svc.saveAnswer(payload);
+    setResponses((prev) => ({
+      ...prev,
+      [qid]: { selectedOption, answerStatus, markedForReview },
+    }));
+  };
 
-      setResponses((prev) => ({
-        ...prev,
-        [qid]: { selectedOption, answerStatus, markedForReview },
-      }));
-    },
-    [svc, attemptId, currentQuestion, responses]
-  );
+  // Wait until every queued save has reached the server.
+  const flushQueue = () =>
+    queueRef.current
+      ? queueRef.current.flush(navigator.onLine ? 8000 : 1500)
+      : Promise.resolve(true);
+
+  // A pause / exit / submit that couldn't be done.
+  const showFailure = (err, retry) => {
+    if (isOtherSessionError(err)) {
+      setConflict("lost");
+    } else if (isNetworkError(err)) {
+      setNetError({ retry });
+    } else {
+      setError(err.response?.data?.message || "Something went wrong");
+    }
+  };
+
+  // The queue couldn't empty: another screen took over, or no connection.
+  const queueBlocked = (retry) => {
+    if (!queueRef.current?.isStopped()) setNetError({ retry });
+  };
 
   // =========================
-  // ANSWER SELECTION (local; saved on navigation/submit)
+  // ANSWER SELECTION (saved straight away, through the queue)
   // =========================
 
   const selectOption = (key) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || !queueRef.current) return;
     const qid = String(currentQuestion.questionId);
+    const markedForReview = Boolean(responses[qid]?.markedForReview);
 
     setResponses((prev) => ({
       ...prev,
@@ -423,169 +791,221 @@ function AttemptPage({ service } = {}) {
       },
     }));
 
-    // Persist immediately (no navigation) so an accidental tab close / back
-    // still keeps this selection. Position (currentQuestionId) is unchanged.
-    svc.saveAnswer({
+    // Position (currentQuestionId) is unchanged; time is added on navigation
+    // and by the heartbeat.
+    queueRef.current.enqueue(qid, {
       attemptId,
       questionId: currentQuestion.questionId,
       questionNumber: currentQuestion.questionNumber,
       selectedOption: key,
       answerStatus: "answered",
-      markedForReview: Boolean(responses[qid]?.markedForReview),
-      timeSpent: 0, // time is accumulated on navigation, not on select
+      markedForReview,
+      timeSpent: 0,
       fromQuestionNumber: currentQuestion.questionNumber,
       saveType: "answer_select",
-    }).catch(() => {});
+    });
   };
 
   // =========================
   // NAVIGATION
   // =========================
 
-  const goToIndex = async (targetIndex, saveType = "direct_navigation") => {
+  const goToIndex = (targetIndex, saveType = "direct_navigation") => {
     if (targetIndex === questionIndex) return;
     const target = sectionQuestions[targetIndex];
-    try {
-      setSaving(true);
-      await persistCurrent(target?.questionNumber, saveType);
-      setQuestionIndex(targetIndex);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to save answer");
-    } finally {
-      setSaving(false);
-    }
+    persistCurrent(target?.questionNumber, saveType);
+    setQuestionIndex(targetIndex);
   };
 
-  const handleSaveNext = async () => {
+  const handleSaveNext = () => {
     const next = questionIndex + 1;
     if (next < sectionQuestions.length) {
-      await goToIndex(next, "save_and_next");
+      goToIndex(next, "save_and_next");
     } else {
-      try {
-        setSaving(true);
-        await persistCurrent(undefined, "save_and_next");
-      } catch (err) {
-        setError(err.response?.data?.message || "Failed to save answer");
-      } finally {
-        setSaving(false);
-      }
+      persistCurrent(undefined, "save_and_next");
     }
   };
 
   // Toggle "marked for review" on the current question. This button does NOT
   // navigate — moving between questions is done via Save & Next / Previous / the
   // palette.
-  const handleToggleMark = async () => {
+  const handleToggleMark = () => {
     if (!currentQuestion) return;
     const qid = String(currentQuestion.questionId);
     const currentlyMarked = Boolean(responses[qid]?.markedForReview);
-    try {
-      setSaving(true);
-      await persistCurrent(undefined, "mark_for_review", {
-        marked: !currentlyMarked,
-      });
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to save answer");
-    } finally {
-      setSaving(false);
-    }
+    persistCurrent(undefined, "mark_for_review", {
+      marked: !currentlyMarked,
+    });
   };
 
-  const handleClearResponse = async () => {
-    try {
-      setSaving(true);
-      await persistCurrent(undefined, "clear_response", { cleared: true });
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to clear answer");
-    } finally {
-      setSaving(false);
-    }
+  const handleClearResponse = () => {
+    persistCurrent(undefined, "clear_response", { cleared: true });
   };
 
   // =========================
   // SUBMIT SECTION
   // =========================
 
-  // Actually submits. Manual submits go through the confirmation card
-  // (setShowSubmitConfirm); auto-submit on time-out calls this directly.
+  const afterSubmit = (res) => {
+    if (res?.attempt?.status === "completed") {
+      finishAndShowResult();
+      return;
+    }
+    // move to next section
+    setSectionIndex((prev) => prev + 1);
+    setQuestionIndex(0);
+  };
+
+  // Manual submit (after the confirmation card). Every save must reach the
+  // server first; if it can't, nothing is submitted.
   async function handleSubmitSection() {
     if (saving) return;
     setShowSubmitConfirm(false);
+    setNetError(null);
 
     try {
       setSaving(true);
-
-      // save whatever is selected on the current question first
-      await persistCurrent(undefined, "direct_navigation").catch(() => {});
-
-      const res = await svc.submit(secondsLeftRef.current);
-
-      const status = res?.attempt?.status;
-
-      if (status === "completed") {
-        navigate(svc.resultPath, { replace: true });
+      persistCurrent(undefined, "direct_navigation");
+      if (!(await flushQueue())) {
+        queueBlocked(handleSubmitSection);
         return;
       }
-
-      // move to next section
-      setSectionIndex((prev) => prev + 1);
-      setQuestionIndex(0);
+      const res = await svc.submit(secondsLeftRef.current, {
+        sessionId: sessionIdRef.current,
+      });
+      afterSubmit(res);
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Failed to submit section"
-      );
+      showFailure(err, handleSubmitSection);
     } finally {
       setSaving(false);
     }
   }
 
+  // Time ran out: lock the screen, get every save to the server (up to ~10 s),
+  // then submit. Offline → stay locked and submit as soon as we're back.
+  async function handleTimeUp() {
+    setShowSubmitConfirm(false);
+    setShowLeavePrompt(false);
+    setShowPalette(false);
+    setNetError(null);
+    setTimeUp("Time's up – submitting…");
+    persistCurrent(undefined, "direct_navigation");
+
+    for (;;) {
+      if (leftRef.current) return;
+      const flushed = queueRef.current ? await queueRef.current.flush(10000) : true;
+      if (queueRef.current?.isStopped()) {
+        setTimeUp(null); // another screen took over — its prompt shows instead
+        return;
+      }
+      if (flushed) {
+        try {
+          const res = await svc.submit(secondsLeftRef.current, {
+            sessionId: sessionIdRef.current,
+          });
+          setTimeUp(null);
+          afterSubmit(res);
+          return;
+        } catch (err) {
+          if (isOtherSessionError(err)) {
+            setTimeUp(null);
+            setConflict("lost");
+            return;
+          }
+          if (!isNetworkError(err)) {
+            setTimeUp(null);
+            setError(err.response?.data?.message || "Failed to submit section");
+            return;
+          }
+        }
+      }
+      setTimeUp(
+        navigator.onLine
+          ? "Time's up – trying to reach the server…"
+          : "Time's up – submitting when you're back online"
+      );
+      await waitForOnline(15000);
+    }
+  }
+
   // =========================
-  // PAUSE / RESUME
+  // PAUSE / RESUME / EXIT
   // =========================
 
   const handlePause = async () => {
     if (saving || paused) return;
+    setNetError(null);
     try {
       setSaving(true);
       // save the current selection/time before freezing the clock
-      await persistCurrent(undefined, "direct_navigation").catch(() => {});
-      await svc.pause(secondsLeft);
+      persistCurrent(undefined, "direct_navigation");
+      if (!(await flushQueue())) {
+        queueBlocked(handlePause);
+        return;
+      }
+      await svc.pause(secondsLeftRef.current, { sessionId: sessionIdRef.current });
       setPaused(true);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to pause");
+      showFailure(err, handlePause);
     } finally {
       setSaving(false);
     }
   };
 
   const handleResume = async () => {
+    setNetError(null);
     try {
       setSaving(true);
-      const res = await svc.resume();
+      const res = await svc.resume({ sessionId: sessionIdRef.current });
       if (res?.currentSectionRemainingSeconds != null) {
         setSecondsLeft(res.currentSectionRemainingSeconds);
       }
-      // don't count the paused gap as time on the current question
-      questionStartRef.current = Date.now();
       setPaused(false);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to resume");
+      showFailure(err, handleResume);
     } finally {
       setSaving(false);
     }
   };
 
-  // Pause the attempt and leave to the dashboard (never back to instructions).
-  const handlePauseAndLeave = async () => {
+  // Save & Exit (paused screen, top-bar Exit, browser Back): save the current
+  // question, wait until every save is on the server, make sure the attempt is
+  // paused there, then leave — ranked/practice → My Attempts, custom → the set.
+  const handleSaveAndExit = async () => {
+    setNetError(null);
     try {
       setSaving(true);
-      await persistCurrent(undefined, "direct_navigation").catch(() => {});
-      if (!paused) await svc.pause(secondsLeft).catch(() => {});
+      persistCurrent(undefined, "direct_navigation");
+      if (!(await flushQueue())) {
+        queueBlocked(handleSaveAndExit);
+        return;
+      }
+      if (!paused) {
+        await svc.pause(secondsLeftRef.current, { sessionId: sessionIdRef.current });
+      }
+      // free this screen's claim first, so reopening the test straight away
+      // never asks "Continue here?"
+      await svc
+        .syncTimer(secondsLeftRef.current ?? undefined, {
+          sessionId: sessionIdRef.current,
+          release: true,
+        })
+        .catch(() => {});
+      leftRef.current = true;
+      questionStartRef.current = null;
       navigate(svc.leavePath);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to leave");
+      showFailure(err, handleSaveAndExit);
+    } finally {
       setSaving(false);
     }
+  };
+
+  // "Continue here" — take the test over from the other tab / device.
+  const handleTakeOver = async () => {
+    setSaving(true);
+    await openScreen(true);
+    setSaving(false);
   };
 
   // =========================
@@ -623,6 +1043,18 @@ function AttemptPage({ service } = {}) {
 
   const sectionLabel = (ATTEMPT_LABEL[attempt?.attemptType] || ATTEMPT_LABEL.practice);
   const isLastQuestion = questionIndex >= sectionQuestions.length - 1;
+
+  // "Saved" / "Saving…" / "Offline"
+  const saveStatus = !online
+    ? "offline"
+    : queueState.pending > 0 || queueState.sending
+    ? "saving"
+    : "saved";
+  const saveStatusLabel = {
+    saved: "✓ Saved",
+    saving: "Saving…",
+    offline: "Offline",
+  }[saveStatus];
 
   // The question-number grid. Shown beside the question on tablets/desktops and
   // inside the slide-up "Questions" panel on phones.
@@ -683,20 +1115,32 @@ function AttemptPage({ service } = {}) {
     </>
   );
 
-  const langButton = (code, short, full) => (
+  const langButton = (code, full) => (
     <button
       onClick={() => changeLang(code)}
-      aria-label={full}
       aria-pressed={lang === code}
-      className={`min-w-10 h-10 px-2 sm:px-3 text-sm font-medium transition ${
+      className={`min-w-10 h-10 px-3 text-sm font-medium transition ${
         lang === code
           ? "bg-black text-white"
           : "bg-white text-gray-600 hover:text-black"
       }`}
     >
-      <span className="sm:hidden">{short}</span>
-      <span className="hidden sm:inline">{full}</span>
+      {full}
     </button>
+  );
+
+  // a full-screen card (pause, leave, submit, errors…)
+  const overlay = (children, label) => (
+    <div
+      className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+    >
+      <div className="bg-white rounded-3xl p-6 sm:p-10 text-center w-full max-w-sm shadow-xl">
+        {children}
+      </div>
+    </div>
   );
 
   return (
@@ -715,6 +1159,21 @@ function AttemptPage({ service } = {}) {
               {currentSection?.sectionName}
             </p>
             <p className="text-xs text-gray-500 truncate">
+              <span
+                role="status"
+                aria-live="polite"
+                data-save-status={saveStatus}
+                className={
+                  saveStatus === "offline"
+                    ? "text-amber-700 font-medium"
+                    : saveStatus === "saving"
+                    ? "text-gray-600"
+                    : "text-green-700"
+                }
+              >
+                {saveStatusLabel}
+              </span>
+              {" · "}
               Section {sectionIndex + 1} / {sections.length}
               {attempt?.attemptType && (
                 <>
@@ -726,10 +1185,17 @@ function AttemptPage({ service } = {}) {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {/* Language toggle */}
-            <div className="flex items-center rounded-xl border border-gray-300 overflow-hidden">
-              {langButton("en", "EN", "English")}
-              {langButton("hi", "हि", "हिंदी")}
+            {/* Language: one switch on phones, both choices from 640px */}
+            <button
+              onClick={() => changeLang(lang === "hi" ? "en" : "hi")}
+              aria-label={lang === "hi" ? "Switch to English" : "Switch to Hindi"}
+              className="sm:hidden min-w-10 h-10 px-2 rounded-xl border border-gray-300 text-sm font-medium"
+            >
+              {lang === "hi" ? "EN" : "हिंदी"}
+            </button>
+            <div className="hidden sm:flex items-center rounded-xl border border-gray-300 overflow-hidden">
+              {langButton("en", "English")}
+              {langButton("hi", "हिंदी")}
             </div>
 
             {/* Countdown */}
@@ -755,129 +1221,247 @@ function AttemptPage({ service } = {}) {
             >
               ⏸<span className="hidden sm:inline"> Pause</span>
             </button>
+
+            {/* Exit — same card as the browser Back button */}
+            <button
+              onClick={() => setShowLeavePrompt(true)}
+              disabled={saving}
+              aria-label="Exit test"
+              className="min-w-10 h-10 px-2 sm:px-4 rounded-xl text-sm font-medium border border-gray-300 hover:border-black disabled:opacity-40 flex items-center justify-center gap-1.5"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
+                <path d="M9 16l-4-4 4-4" />
+                <path d="M5 12h11" />
+              </svg>
+              <span className="hidden sm:inline">Exit</span>
+            </button>
           </div>
         </div>
+
+        {/* Offline: the full message under the bar */}
+        {saveStatus === "offline" && (
+          <div className="border-t border-amber-200 bg-amber-50 text-amber-800 text-xs sm:text-sm px-3 py-1.5 text-center">
+            {OFFLINE_TEXT}
+          </div>
+        )}
       </header>
 
-      <div className="max-w-[1100px] mx-auto pt-14 sm:pt-16 pb-24 md:pb-0 md:grid md:grid-cols-[minmax(0,1fr)_15rem] lg:grid-cols-[minmax(0,1fr)_17rem] gap-4 lg:gap-6 items-start">
+      <div
+        className={`max-w-[1100px] mx-auto ${
+          saveStatus === "offline" ? "pt-[5.25rem] sm:pt-[5.75rem]" : "pt-14 sm:pt-16"
+        } pb-24 md:pb-0 md:grid md:grid-cols-[minmax(0,1fr)_15rem] lg:grid-cols-[minmax(0,1fr)_17rem] gap-4 lg:gap-6 items-start`}
+      >
       {/* ========================= */}
-      {/* LEAVE PROMPT (back button) */}
+      {/* LEAVE PROMPT (Exit button / browser Back) */}
       {/* ========================= */}
 
-      {showLeavePrompt && !paused && (
-        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-10 text-center w-full max-w-sm shadow-xl">
-            <div className="text-4xl mb-3">⏸</div>
-            <h2 className="text-2xl font-bold text-gray-900">Leave the test?</h2>
-            <p className="text-gray-500 mt-2">
-              Your progress is saved. You can pause and come back later — you'll
-              resume from exactly where you left off.
-            </p>
-            <div className="mt-6 space-y-3">
-              <button
-                onClick={handlePauseAndLeave}
-                disabled={saving}
-                className="w-full bg-black text-white py-3 rounded-2xl font-medium hover:opacity-90 disabled:opacity-40"
-              >
-                Pause &amp; go back
-              </button>
-              <button
-                onClick={() => setShowLeavePrompt(false)}
-                disabled={saving}
-                className="w-full border border-gray-300 py-3 rounded-2xl font-medium hover:border-black disabled:opacity-40"
-              >
-                Stay in test
-              </button>
-            </div>
+      {showLeavePrompt && !paused && !conflict && !timeUp && overlay(
+        <>
+          <div className="text-4xl mb-3">⏸</div>
+          <h2 className="text-2xl font-bold text-gray-900">Leave the test?</h2>
+          <p className="text-gray-500 mt-2">
+            Your answers and time are saved and the test is paused. You'll
+            resume from exactly where you left off.
+          </p>
+          <div className="mt-6 space-y-3">
+            <button
+              onClick={handleSaveAndExit}
+              disabled={saving}
+              className="w-full bg-black text-white py-3 rounded-2xl font-medium hover:opacity-90 disabled:opacity-40"
+            >
+              {saving ? "Saving..." : "Save & Exit"}
+            </button>
+            <button
+              onClick={() => setShowLeavePrompt(false)}
+              disabled={saving}
+              className="w-full border border-gray-300 py-3 rounded-2xl font-medium hover:border-black disabled:opacity-40"
+            >
+              Stay in test
+            </button>
           </div>
-        </div>
+        </>,
+        "Leave the test?"
       )}
 
       {/* ========================= */}
       {/* PAUSED OVERLAY */}
       {/* ========================= */}
 
-      {paused && (
-        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-10 text-center w-full max-w-sm shadow-xl">
-            <div className="text-4xl mb-3">⏸</div>
-            <h2 className="text-2xl font-bold text-gray-900">Test paused</h2>
-            <p className="text-gray-500 mt-2">
-              Your timer is frozen. The test stays hidden until you resume.
+      {paused && !conflict && overlay(
+        <>
+          <div className="text-4xl mb-3">⏸</div>
+          <h2 className="text-2xl font-bold text-gray-900">Test paused</h2>
+          <p className="text-gray-500 mt-2">
+            Your timer is frozen. The test stays hidden until you resume.
+          </p>
+          {attempt?.attemptType === "ranked" && (
+            <p className="text-sm text-gray-700 mt-3">
+              Your answers and remaining time are saved. Resume any time from My Attempts.
             </p>
-            {secondsLeft !== null && (
-              <p className="text-gray-800 font-semibold mt-4 tabular-nums">
-                {isCustom ? "Time left" : "Time left in this section"}:{" "}
-                {formatClock(secondsLeft)}
-              </p>
-            )}
+          )}
+          {secondsLeft !== null && (
+            <p className="text-gray-800 font-semibold mt-4 tabular-nums">
+              {isCustom ? "Time left" : "Time left in this section"}:{" "}
+              {formatClock(secondsLeft)}
+            </p>
+          )}
+          <div className="mt-6 space-y-3">
             <button
               onClick={handleResume}
               disabled={saving}
-              className="mt-6 w-full bg-black text-white py-3 rounded-2xl font-medium hover:opacity-90 disabled:opacity-40"
+              className="w-full bg-black text-white py-3 rounded-2xl font-medium hover:opacity-90 disabled:opacity-40"
             >
               ▶ Resume test
             </button>
+            <button
+              onClick={handleSaveAndExit}
+              disabled={saving}
+              className="w-full border border-gray-300 py-3 rounded-2xl font-medium hover:border-black disabled:opacity-40"
+            >
+              Save &amp; Exit
+            </button>
           </div>
-        </div>
+        </>,
+        "Test paused"
       )}
 
       {/* ========================= */}
       {/* SUBMIT CONFIRMATION CARD */}
       {/* ========================= */}
 
-      {showSubmitConfirm && (
-        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-10 w-full max-w-sm shadow-xl text-center">
-            <div className="text-4xl mb-3">{isLastSection ? "🏁" : "📤"}</div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {isLastSection ? "Finish the test?" : "Submit this section?"}
-            </h2>
+      {showSubmitConfirm && !conflict && !timeUp && overlay(
+        <>
+          <div className="text-4xl mb-3">{isLastSection ? "🏁" : "📤"}</div>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {isLastSection ? "Finish the test?" : "Submit this section?"}
+          </h2>
 
-            {/* Section summary */}
-            <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3 text-center">
-              <div className="rounded-2xl bg-gray-50 p-3">
-                <p className="text-lg font-bold text-gray-900">{sectionQuestions.length}</p>
-                <p className="text-xs text-gray-500">Questions</p>
-              </div>
-              <div className="rounded-2xl bg-green-50 p-3">
-                <p className="text-lg font-bold text-green-700">{sectionAnswered}</p>
-                <p className="text-xs text-gray-500">Answered</p>
-              </div>
-              <div className="rounded-2xl bg-purple-50 p-3">
-                <p className="text-lg font-bold text-purple-700">{sectionMarked}</p>
-                <p className="text-xs text-gray-500">Marked</p>
-              </div>
+          {/* Section summary */}
+          <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3 text-center">
+            <div className="rounded-2xl bg-gray-50 p-3">
+              <p className="text-lg font-bold text-gray-900">{sectionQuestions.length}</p>
+              <p className="text-xs text-gray-500">Questions</p>
             </div>
-
-            <p className="text-gray-500 mt-5 text-sm">
-              {isLastSection
-                ? "This ends the test and generates your result. You can't come back to it."
-                : "You won't be able to return to this section once submitted."}
-            </p>
-
-            <div className="mt-6 space-y-3">
-              <button
-                onClick={handleSubmitSection}
-                disabled={saving}
-                className="w-full bg-green-600 text-white py-3 rounded-2xl font-medium hover:opacity-90 disabled:opacity-40"
-              >
-                {saving
-                  ? "Submitting..."
-                  : isLastSection
-                  ? "Submit & finish test"
-                  : "Submit section"}
-              </button>
-              <button
-                onClick={() => setShowSubmitConfirm(false)}
-                disabled={saving}
-                className="w-full border border-gray-300 py-3 rounded-2xl font-medium hover:border-black disabled:opacity-40"
-              >
-                Go back
-              </button>
+            <div className="rounded-2xl bg-green-50 p-3">
+              <p className="text-lg font-bold text-green-700">{sectionAnswered}</p>
+              <p className="text-xs text-gray-500">Answered</p>
+            </div>
+            <div className="rounded-2xl bg-purple-50 p-3">
+              <p className="text-lg font-bold text-purple-700">{sectionMarked}</p>
+              <p className="text-xs text-gray-500">Marked</p>
             </div>
           </div>
-        </div>
+
+          <p className="text-gray-500 mt-5 text-sm">
+            {isLastSection
+              ? "This ends the test and generates your result. You can't come back to it."
+              : "You won't be able to return to this section once submitted."}
+          </p>
+
+          <div className="mt-6 space-y-3">
+            <button
+              onClick={handleSubmitSection}
+              disabled={saving}
+              className="w-full bg-green-600 text-white py-3 rounded-2xl font-medium hover:opacity-90 disabled:opacity-40"
+            >
+              {saving
+                ? "Submitting..."
+                : isLastSection
+                ? "Submit & finish test"
+                : "Submit section"}
+            </button>
+            <button
+              onClick={() => setShowSubmitConfirm(false)}
+              disabled={saving}
+              className="w-full border border-gray-300 py-3 rounded-2xl font-medium hover:border-black disabled:opacity-40"
+            >
+              Go back
+            </button>
+          </div>
+        </>,
+        isLastSection ? "Finish the test?" : "Submit this section?"
+      )}
+
+      {/* ========================= */}
+      {/* CAN'T REACH THE SERVER */}
+      {/* ========================= */}
+
+      {netError && !conflict && !timeUp && overlay(
+        <>
+          <div className="text-4xl mb-3">📶</div>
+          <h2 className="text-xl font-bold text-gray-900">Not saved yet</h2>
+          <p className="text-gray-600 mt-2">{NET_ERROR_TEXT}</p>
+          <div className="mt-6 space-y-3">
+            <button
+              onClick={() => netError.retry()}
+              disabled={saving}
+              className="w-full bg-black text-white py-3 rounded-2xl font-medium hover:opacity-90 disabled:opacity-40"
+            >
+              {saving ? "Trying..." : "Retry"}
+            </button>
+            <button
+              onClick={() => setNetError(null)}
+              disabled={saving}
+              className="w-full border border-gray-300 py-3 rounded-2xl font-medium hover:border-black disabled:opacity-40"
+            >
+              Back to the test
+            </button>
+          </div>
+        </>,
+        "Not saved yet"
+      )}
+
+      {/* ========================= */}
+      {/* TIME'S UP (screen locked until submitted) */}
+      {/* ========================= */}
+
+      {timeUp && !conflict && overlay(
+        <>
+          <div className="text-4xl mb-3">⏰</div>
+          <h2 className="text-xl font-bold text-gray-900" role="status" aria-live="assertive">
+            {timeUp}
+          </h2>
+          <p className="text-gray-500 mt-2 text-sm">
+            Keep this page open. Your answers are kept on this device until they're saved.
+          </p>
+        </>,
+        "Time's up"
+      )}
+
+      {/* ========================= */}
+      {/* OPENED IN ANOTHER TAB / DEVICE */}
+      {/* ========================= */}
+
+      {conflict && overlay(
+        <>
+          <div className="text-4xl mb-3">🗂</div>
+          <h2 className="text-xl font-bold text-gray-900">{CONFLICT_TEXT}</h2>
+          <p className="text-gray-500 mt-2 text-sm">
+            Only one screen can work on a test at a time. Continuing here makes the
+            other one read-only.
+          </p>
+          <div className="mt-6 space-y-3">
+            <button
+              onClick={handleTakeOver}
+              disabled={saving}
+              className="w-full bg-black text-white py-3 rounded-2xl font-medium hover:opacity-90 disabled:opacity-40"
+            >
+              {saving ? "Please wait..." : "Continue here"}
+            </button>
+            <button
+              onClick={() => {
+                leftRef.current = true;
+                navigate(svc.leavePath);
+              }}
+              disabled={saving}
+              className="w-full border border-gray-300 py-3 rounded-2xl font-medium hover:border-black disabled:opacity-40"
+            >
+              Leave
+            </button>
+          </div>
+        </>,
+        "Test open elsewhere"
       )}
 
       {/* ========================= */}
