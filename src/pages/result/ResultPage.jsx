@@ -16,10 +16,10 @@ const formatTime = (seconds) => {
 };
 
 const Stat = ({ label, value, accent }) => (
-  <div className="bg-gray-50 rounded-2xl p-5">
+  <div className="bg-gray-50 rounded-2xl p-4 sm:p-5 min-w-0">
     <p className="text-sm text-gray-500">{label}</p>
     <h2
-      className={`text-2xl font-bold mt-2 ${accent || "text-gray-900"}`}
+      className={`text-xl sm:text-2xl font-bold mt-2 break-words ${accent || "text-gray-900"}`}
     >
       {value}
     </h2>
@@ -41,9 +41,9 @@ const ImprovementStat = ({ label, first, now, delta, suffix }) => {
       : "text-gray-500";
 
   return (
-    <div className="bg-gray-50 rounded-2xl p-5">
+    <div className="bg-gray-50 rounded-2xl p-4 sm:p-5">
       <p className="text-sm text-gray-500">{label}</p>
-      <div className="flex items-baseline gap-2 mt-2">
+      <div className="flex flex-wrap items-baseline gap-2 mt-2">
         <span className="text-gray-400 text-sm">{first}</span>
         <span className="text-gray-300">→</span>
         <span className="text-2xl font-bold text-gray-900">{now}</span>
@@ -94,14 +94,14 @@ function ResultPage() {
   const comp = result.competitionStats || {};
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6">
       {/* ========================= */}
       {/* HEADLINE */}
       {/* ========================= */}
 
       <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-green-700 to-green-500 px-8 py-7 flex items-start justify-between gap-4">
-          <div>
+        <div className="bg-gradient-to-r from-green-700 to-green-500 px-5 py-5 sm:px-8 sm:py-7 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="min-w-0">
             <p className="text-green-100 text-sm font-medium">
               Test completed
               {result.attemptType &&
@@ -116,13 +116,13 @@ function ResultPage() {
 
           <button
             onClick={() => navigate("/dashboard")}
-            className="shrink-0 bg-white/15 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/25 transition"
+            className="shrink-0 self-start min-h-10 bg-white/15 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/25 transition"
           >
-            Back to Dashboard
+            ← Back to Dashboard
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 p-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5 p-4 sm:p-8">
           <Stat label="Score" value={result.score} />
           <Stat
             label="Accuracy"
@@ -148,7 +148,7 @@ function ResultPage() {
       {/* TABS */}
       {/* ========================= */}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2" role="tablist">
         {[
           { key: "analysis", label: "Analysis" },
           { key: "solutions", label: "Solutions" },
@@ -156,7 +156,9 @@ function ResultPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-5 py-2.5 rounded-2xl text-sm font-medium border transition ${
+            role="tab"
+            aria-selected={tab === t.key}
+            className={`min-h-11 px-5 py-2.5 rounded-2xl text-sm font-medium border transition ${
               tab === t.key
                 ? "bg-blue-600 text-white border-blue-600"
                 : "border-gray-300 text-gray-700 hover:border-black"
@@ -177,7 +179,7 @@ function ResultPage() {
       {/* ========================= */}
 
       {result.improvement && (
-        <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
+        <div className="bg-white rounded-3xl border border-gray-200 p-5 sm:p-8 shadow-sm">
           <h2 className="text-xl font-bold mb-2">
             Improvement vs First Attempt
           </h2>
@@ -186,7 +188,7 @@ function ResultPage() {
             to your first (ranked) attempt.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
             <ImprovementStat
               label="Score"
               first={result.improvement.rankedScore}
@@ -214,10 +216,10 @@ function ResultPage() {
       {/* BREAKDOWN */}
       {/* ========================= */}
 
-      <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
-        <h2 className="text-xl font-bold mb-6">Overview</h2>
+      <div className="bg-white rounded-3xl border border-gray-200 p-5 sm:p-8 shadow-sm">
+        <h2 className="text-xl font-bold mb-4 sm:mb-6">Overview</h2>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5">
           <Stat
             label="Correct"
             value={result.correct}
@@ -249,10 +251,10 @@ function ResultPage() {
       {/* COMPETITION */}
       {/* ========================= */}
 
-      <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
-        <h2 className="text-xl font-bold mb-6">How You Compare</h2>
+      <div className="bg-white rounded-3xl border border-gray-200 p-5 sm:p-8 shadow-sm">
+        <h2 className="text-xl font-bold mb-4 sm:mb-6">How You Compare</h2>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5">
           <Stat
             label="Participants"
             value={comp.totalParticipants ?? 0}
@@ -274,10 +276,11 @@ function ResultPage() {
       {/* ========================= */}
 
       {result.subjects?.length > 0 && (
-        <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm overflow-x-auto">
-          <h2 className="text-xl font-bold mb-6">Subject-wise</h2>
+        <div className="bg-white rounded-3xl border border-gray-200 p-5 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-bold mb-4 sm:mb-6">Subject-wise</h2>
 
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="text-left text-gray-500 border-b border-gray-200">
                 <th className="py-3 pr-4">Subject</th>
@@ -310,6 +313,7 @@ function ResultPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -318,10 +322,11 @@ function ResultPage() {
       {/* ========================= */}
 
       {result.topics?.length > 0 && (
-        <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm overflow-x-auto">
-          <h2 className="text-xl font-bold mb-6">Topic-wise</h2>
+        <div className="bg-white rounded-3xl border border-gray-200 p-5 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-bold mb-4 sm:mb-6">Topic-wise</h2>
 
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="text-left text-gray-500 border-b border-gray-200">
                 <th className="py-3 pr-4">Topic</th>
@@ -352,6 +357,7 @@ function ResultPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

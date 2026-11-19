@@ -185,10 +185,10 @@ function SolutionsPanel({ questions }) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Bookmark lock message (question is in the custom practice set) */}
       {bmNotice && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg max-w-md text-center">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg w-[calc(100%-2rem)] max-w-md text-center">
           {bmNotice}
         </div>
       )}
@@ -201,7 +201,8 @@ function SolutionsPanel({ questions }) {
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`px-4 py-2 rounded-2xl text-sm font-medium border transition ${
+                aria-pressed={filter === f.key}
+                className={`min-h-10 px-4 py-2 rounded-2xl text-sm font-medium border transition ${
                   filter === f.key
                     ? "bg-black text-white border-black"
                     : "border-gray-300 text-gray-700 hover:border-black"
@@ -217,7 +218,8 @@ function SolutionsPanel({ questions }) {
           <div className="flex items-center rounded-xl border border-gray-300 overflow-hidden">
             <button
               onClick={() => changeLang("en")}
-              className={`px-3 py-2 text-sm font-medium transition ${
+              aria-pressed={lang === "en"}
+              className={`min-h-10 px-3 py-2 text-sm font-medium transition ${
                 lang === "en"
                   ? "bg-black text-white"
                   : "bg-white text-gray-600 hover:text-black"
@@ -227,7 +229,8 @@ function SolutionsPanel({ questions }) {
             </button>
             <button
               onClick={() => changeLang("hi")}
-              className={`px-3 py-2 text-sm font-medium transition ${
+              aria-pressed={lang === "hi"}
+              className={`min-h-10 min-w-10 px-3 py-2 text-sm font-medium transition ${
                 lang === "hi"
                   ? "bg-black text-white"
                   : "bg-white text-gray-600 hover:text-black"
@@ -241,14 +244,15 @@ function SolutionsPanel({ questions }) {
         {/* Subject row — pointless when the paper has only one subject */}
         {subjects.length > 1 && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 mr-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 mr-1">
               Subject
             </span>
             {[ALL, ...subjects].map((s) => (
               <button
                 key={s}
                 onClick={() => setSubject(s)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
+                aria-pressed={subject === s}
+                className={`min-h-10 px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
                   subject === s
                     ? "bg-gray-900 text-white border-gray-900"
                     : "border-gray-300 text-gray-600 hover:border-gray-900"
@@ -265,7 +269,7 @@ function SolutionsPanel({ questions }) {
       </div>
 
       {visible.length === 0 ? (
-        <div className="bg-white border rounded-3xl p-10 text-center text-gray-500">
+        <div className="bg-white border rounded-3xl p-6 sm:p-10 text-center text-gray-500">
           No questions match these filters.
         </div>
       ) : (
@@ -276,12 +280,12 @@ function SolutionsPanel({ questions }) {
           return (
             <div
               key={q.questionId}
-              className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm"
+              className="bg-white rounded-3xl border border-gray-200 p-4 sm:p-6 lg:p-8 shadow-sm"
             >
               {/* Header */}
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div>
-                  <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-start justify-between gap-3 sm:gap-4 mb-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <h3 className="text-lg font-bold text-gray-900">
                       Q{q.sectionQuestionNumber}
                     </h3>
@@ -310,20 +314,26 @@ function SolutionsPanel({ questions }) {
                     )}
                   </div>
 
-                  <p className="text-xs text-gray-400 mt-2">
+                  <p className="text-xs text-gray-500 mt-2 break-words">
                     {q.sectionName} · {q.subjectName} · {q.topicName}
                   </p>
                 </div>
 
-                <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex flex-col items-end gap-1 shrink-0">
                   <button
                     onClick={() => toggleBm(q.questionId)}
+                    aria-pressed={bookmarked.has(String(q.questionId))}
+                    aria-label={
+                      bookmarked.has(String(q.questionId))
+                        ? "Remove bookmark"
+                        : "Bookmark this question"
+                    }
                     title={
                       bookmarked.has(String(q.questionId))
                         ? "Remove bookmark"
                         : "Bookmark this question"
                     }
-                    className={`text-xl leading-none transition ${
+                    className={`w-11 h-11 -mr-2 -mt-2 flex items-center justify-center rounded-xl text-2xl leading-none transition hover:bg-amber-50 ${
                       bookmarked.has(String(q.questionId))
                         ? "text-amber-500"
                         : "text-gray-300 hover:text-amber-500"
@@ -345,7 +355,7 @@ function SolutionsPanel({ questions }) {
                       {q.marksAwarded > 0 ? "+" : ""}
                       {q.marksAwarded}
                     </p>
-                    <p className="text-gray-400 mt-1">
+                    <p className="text-gray-500 mt-1">
                       {formatTime(q.timeSpent)}
                     </p>
                   </div>
@@ -354,14 +364,14 @@ function SolutionsPanel({ questions }) {
 
               {/* Question */}
               <div
-                className="text-gray-900 leading-7 prose max-w-none"
+                className="text-gray-900 leading-7 prose max-w-none break-words [&_img]:max-w-full [&_img]:h-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
                 dangerouslySetInnerHTML={{
                   __html: drawMathInHtml(pickText(q.questionText, lang)),
                 }}
               />
 
               {/* Options */}
-              <div className="mt-6 space-y-3">
+              <div className="mt-5 sm:mt-6 space-y-3">
                 {(q.options || []).map((option) => {
                   const isCorrect = option.key === q.correctAnswer;
                   const isSelected = option.key === q.selectedOption;
@@ -369,24 +379,24 @@ function SolutionsPanel({ questions }) {
                   return (
                     <div
                       key={option.key}
-                      className={`border rounded-2xl p-4 ${optionClasses(
+                      className={`border rounded-2xl p-3 sm:p-4 ${optionClasses(
                         q,
                         option.key
                       )}`}
                     >
-                      <div className="flex items-start gap-4">
+                      <div className="flex flex-wrap sm:flex-nowrap items-start gap-x-3 gap-y-1 sm:gap-4">
                         <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center font-medium shrink-0 bg-white">
                           {option.key}
                         </div>
 
                         <div
-                          className="prose max-w-none flex-1"
+                          className="prose max-w-none flex-1 min-w-0 break-words pt-0.5 [&_img]:max-w-full [&_img]:h-auto"
                           dangerouslySetInnerHTML={{
                             __html: drawMathInHtml(pickText(option.text, lang)),
                           }}
                         />
 
-                        <div className="flex flex-col items-end gap-1 shrink-0">
+                        <div className="w-full sm:w-auto pl-11 sm:pl-0 flex sm:flex-col items-center sm:items-end gap-x-3 gap-y-1 shrink-0 empty:hidden">
                           {isCorrect && (
                             <span className="text-xs font-medium text-green-700">
                               Correct answer
@@ -418,12 +428,12 @@ function SolutionsPanel({ questions }) {
 
               {/* Explanation */}
               {(q.explanation?.english || q.explanation?.hindi) && (
-                <div className="mt-6 bg-gray-50 rounded-2xl p-5">
+                <div className="mt-5 sm:mt-6 bg-gray-50 rounded-2xl p-4 sm:p-5">
                   <p className="text-sm font-semibold text-gray-700 mb-2">
                     Explanation
                   </p>
                   <div
-                    className="prose max-w-none text-gray-700"
+                    className="prose max-w-none text-gray-700 break-words [&_img]:max-w-full [&_img]:h-auto"
                     dangerouslySetInnerHTML={{
                       __html: drawMathInHtml(pickText(q.explanation, lang)),
                     }}
