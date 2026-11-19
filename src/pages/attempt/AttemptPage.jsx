@@ -19,6 +19,7 @@ import {
   resumeAttempt,
   syncTimer,
 } from "../../services/test.service";
+import api from "../../api/axios";
 
 import { drawMathInHtml } from "../../lib/math";
 
@@ -73,7 +74,8 @@ const rankedPracticeService = (attemptId) => ({
   pause: (remainingSeconds) => pauseAttempt(attemptId, remainingSeconds),
   resume: () => resumeAttempt(attemptId),
   syncTimer: (remainingSeconds) => syncTimer(attemptId, remainingSeconds),
-  timerUrl: "http://localhost:5000/api/student/attempt/timer",
+  // same API base URL as every other call (custom mode does the same)
+  timerUrl: `${api.defaults.baseURL}/api/student/attempt/timer`,
   resultPath: `/result/${attemptId}`,
   leavePath: "/dashboard",
 });
