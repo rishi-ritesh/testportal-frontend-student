@@ -42,6 +42,17 @@ export function mockActions(testId, attempt) {
   };
 }
 
+// testIds (as strings) that have a practice attempt still open (in progress or
+// paused), from the My Attempts list. For those tests "Re-attempt" is not
+// offered on the completed rows: the open practice row already has "Resume".
+export function testsWithOpenPractice(attempts) {
+  return new Set(
+    (attempts || [])
+      .filter((a) => a.attemptType === "practice" && a.status !== "completed" && a.testId)
+      .map((a) => String(a.testId))
+  );
+}
+
 // Small "Attempted" / "In progress" pill styles
 export const LABEL_STYLE = {
   Attempted: "bg-green-100 text-green-800",

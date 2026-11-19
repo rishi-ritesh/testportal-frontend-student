@@ -6,7 +6,11 @@ import {
   getMyAttempts,
   getBookmarkIds,
 } from "../../services/test.service";
-import { instructionsPath } from "../../lib/attemptActions";
+import {
+  instructionsPath,
+  testsWithOpenPractice,
+} from "../../lib/attemptActions";
+import AttemptTypeBadge from "../../components/AttemptTypeBadge";
 
 const DASHBOARD_LIMIT = 3;
 
@@ -75,6 +79,8 @@ function DashboardPage() {
 
   const visiblePackages = packages.slice(0, DASHBOARD_LIMIT);
   const visibleAttempts = attempts.slice(0, DASHBOARD_LIMIT);
+  // from ALL attempts, not just the ones shown here
+  const openPractice = testsWithOpenPractice(attempts);
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -160,9 +166,12 @@ function DashboardPage() {
                     className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4"
                   >
                     <div className="min-w-0 w-full sm:w-auto">
-                      <p className="font-semibold text-gray-900 truncate">
-                        {i + 1}. {a.testTitle}
-                      </p>
+                      <div className="flex items-start gap-2 min-w-0">
+                        <p className="font-semibold text-gray-900 min-w-0 line-clamp-2 sm:truncate">
+                          {i + 1}. {a.testTitle}
+                        </p>
+                        <AttemptTypeBadge type={a.attemptType} />
+                      </div>
                       {a.seriesNames?.length > 0 && (
                         <p className="text-xs text-gray-400 mt-0.5 truncate">
                           {a.seriesNames.join(", ")}
@@ -203,7 +212,8 @@ function DashboardPage() {
                       >
                         {isCompleted ? "View Report" : "Resume"}
                       </button>
-                      {isCompleted && a.testId && (
+                      {/* hidden while this test has a practice attempt open (its row shows Resume) */}
+                      {isCompleted && a.testId && !openPractice.has(String(a.testId)) && (
                         <button
                           onClick={() => navigate(instructionsPath(a.testId))}
                           className="flex-1 sm:flex-none min-h-10 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap border border-green-600 text-green-700 hover:bg-green-50 transition"
