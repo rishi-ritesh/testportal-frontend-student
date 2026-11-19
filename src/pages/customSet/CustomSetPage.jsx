@@ -38,8 +38,8 @@ const ALL = "__all__";
 
 function ConfirmCard({ icon, title, text, confirmLabel, danger, busy, onConfirm, onCancel }) {
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center">
-      <div className="bg-white rounded-3xl p-10 max-w-sm mx-4 shadow-xl text-center">
+    <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl p-6 sm:p-10 w-full max-w-sm shadow-xl text-center">
         <div className="text-4xl mb-3">{icon}</div>
         <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
         <p className="text-gray-500 mt-3 text-sm">{text}</p>
@@ -272,7 +272,7 @@ function CustomSetPage() {
   // =========================
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6">
       {confirm === "clear" && (
         <ConfirmCard
           icon="🗑"
@@ -304,9 +304,9 @@ function CustomSetPage() {
 
       {/* ================= HEADER ================= */}
       <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-800 to-indigo-600 px-6 py-5 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-white text-lg font-bold tracking-wide flex items-center gap-3">
+        <div className="bg-gradient-to-r from-indigo-800 to-indigo-600 px-4 py-4 sm:px-6 sm:py-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-white text-lg font-bold tracking-wide flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-2xl">🎯</span>
               MY CUSTOM PRACTICE SET
               <span className="text-sm font-medium bg-white/15 px-3 py-1 rounded-full">
@@ -319,11 +319,11 @@ function CustomSetPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {hasResult && !locked && (
               <Link
                 to="/custom-set/result"
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/25"
+                className="min-h-10 inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/25"
               >
                 View last result
               </Link>
@@ -332,7 +332,7 @@ function CustomSetPage() {
             {locked ? (
               <button
                 onClick={() => navigate("/custom-set/attempt")}
-                className="px-5 py-2 rounded-xl text-sm font-semibold bg-white text-indigo-700 hover:opacity-90"
+                className="min-h-10 px-5 py-2 rounded-xl text-sm font-semibold bg-white text-indigo-700 hover:opacity-90"
               >
                 ▶ {runInfo.status === "paused" ? "Resume test" : "Continue test"}
               </button>
@@ -340,7 +340,7 @@ function CustomSetPage() {
               <button
                 onClick={onStartClick}
                 disabled={busy || counts.needed > 0}
-                className="px-5 py-2 rounded-xl text-sm font-semibold bg-white text-indigo-700 hover:opacity-90 disabled:opacity-50"
+                className="min-h-10 px-5 py-2 rounded-xl text-sm font-semibold bg-white text-indigo-700 hover:opacity-90 disabled:opacity-50"
               >
                 ▶ {hasResult ? "Start again" : "Start test"}
               </button>
@@ -349,7 +349,7 @@ function CustomSetPage() {
         </div>
 
         {/* status line */}
-        <div className="px-6 py-4 text-sm flex flex-wrap gap-x-6 gap-y-2 text-gray-600">
+        <div className="px-4 sm:px-6 py-4 text-sm flex flex-wrap gap-x-6 gap-y-2 text-gray-600">
           {locked ? (
             <span className="text-amber-700 font-medium">
               🔒 Test {runInfo.status === "paused" ? "paused" : "in progress"} — the set can't be
@@ -386,7 +386,7 @@ function CustomSetPage() {
       )}
 
       {/* ================= TIMER ================= */}
-      <section className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
+      <section className="bg-white rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm">
         <h2 className="font-bold text-gray-900">⏱ Timer</h2>
         <p className="text-sm text-gray-500 mt-1">
           One timer for the whole set. Default is {limits.DEFAULT_SECONDS_PER_QUESTION} seconds per
@@ -402,14 +402,14 @@ function CustomSetPage() {
             value={timerInput}
             disabled={locked || busy}
             onChange={(e) => setTimerInput(e.target.value)}
-            className="w-28 border border-gray-300 rounded-xl px-3 py-2 disabled:bg-gray-50"
+            className="w-28 min-h-10 border border-gray-300 rounded-xl px-3 py-2 disabled:bg-gray-50"
           />
           <span className="text-sm text-gray-600">seconds per question</span>
 
           <button
             onClick={saveTimer}
             disabled={locked || busy || !timerChanged}
-            className="px-4 py-2 rounded-xl text-sm font-medium bg-black text-white disabled:opacity-40"
+            className="min-h-10 px-4 py-2 rounded-xl text-sm font-medium bg-black text-white disabled:opacity-40"
           >
             Save
           </button>
@@ -417,7 +417,7 @@ function CustomSetPage() {
             <button
               onClick={resetTimer}
               disabled={locked || busy}
-              className="px-4 py-2 rounded-xl text-sm font-medium border border-gray-300 hover:border-black disabled:opacity-40"
+              className="min-h-10 px-4 py-2 rounded-xl text-sm font-medium border border-gray-300 hover:border-black disabled:opacity-40"
             >
               Use default ({limits.DEFAULT_SECONDS_PER_QUESTION}s)
             </button>
@@ -434,8 +434,8 @@ function CustomSetPage() {
       </section>
 
       {/* ================= QUESTIONS IN SET ================= */}
-      <section className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
+      <section className="bg-white rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-bold text-gray-900">
             Questions in your set{" "}
             <span className="text-gray-400 font-medium">({counts.total})</span>
@@ -444,7 +444,7 @@ function CustomSetPage() {
             <button
               onClick={() => setConfirm("clear")}
               disabled={locked || busy}
-              className="px-4 py-2 rounded-xl text-sm font-medium border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-40"
+              className="min-h-10 px-4 py-2 rounded-xl text-sm font-medium border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-40"
             >
               Clear all
             </button>
@@ -458,18 +458,18 @@ function CustomSetPage() {
         ) : (
           <ol className="mt-4 divide-y divide-gray-100">
             {setData.questions.map((q, i) => (
-              <li key={q.questionId} className="py-3 flex items-start gap-4">
-                <span className="w-8 shrink-0 text-sm text-gray-400 tabular-nums pt-0.5">
+              <li key={q.questionId} className="py-3 flex items-start gap-2 sm:gap-4">
+                <span className="w-7 sm:w-8 shrink-0 text-sm text-gray-500 tabular-nums pt-0.5">
                   {i + 1}.
                 </span>
                 <div className="flex-1 min-w-0">
                   {q.available ? (
                     <>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500 break-words">
                         {[q.subjectName, q.topicName, q.questionCode].filter(Boolean).join(" · ")}
                       </p>
                       <div
-                        className="text-sm text-gray-800 line-clamp-2 prose max-w-none"
+                        className="text-sm text-gray-800 line-clamp-2 prose max-w-none break-words"
                         dangerouslySetInnerHTML={{
                           __html: drawMathInHtml(pickText(q.questionText, lang)),
                         }}
@@ -484,7 +484,7 @@ function CustomSetPage() {
                 <button
                   onClick={() => removeOne(q.questionId)}
                   disabled={locked || busy}
-                  className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border border-gray-300 hover:border-red-400 hover:text-red-600 disabled:opacity-40"
+                  className="shrink-0 min-h-10 px-3 py-1.5 rounded-xl text-sm font-medium border border-gray-300 hover:border-red-400 hover:text-red-600 disabled:opacity-40"
                 >
                   Remove
                 </button>
@@ -495,7 +495,7 @@ function CustomSetPage() {
       </section>
 
       {/* ================= ADD FROM BOOKMARKS ================= */}
-      <section className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
+      <section className="bg-white rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm">
         <h2 className="font-bold text-gray-900">
           Add from your bookmarks{" "}
           <span className="text-gray-400 font-medium">({candidates.length} not in set)</span>
@@ -518,7 +518,7 @@ function CustomSetPage() {
               <select
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="border border-gray-300 rounded-xl px-3 py-2 text-sm"
+                className="min-h-10 max-w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
               >
                 <option value={ALL}>All subjects ({candidates.length})</option>
                 {subjects.map((s) => (
@@ -531,7 +531,7 @@ function CustomSetPage() {
               <button
                 onClick={selectAllShown}
                 disabled={locked || busy}
-                className="px-3 py-2 rounded-xl text-sm border border-gray-300 hover:border-black disabled:opacity-40"
+                className="min-h-10 px-3 py-2 rounded-xl text-sm border border-gray-300 hover:border-black disabled:opacity-40"
               >
                 Select all shown
               </button>
@@ -544,12 +544,12 @@ function CustomSetPage() {
                   value={randomCount}
                   onChange={(e) => setRandomCount(e.target.value)}
                   disabled={locked || busy}
-                  className="w-20 border border-gray-300 rounded-xl px-3 py-2 text-sm"
+                  className="w-20 min-h-10 border border-gray-300 rounded-xl px-3 py-2 text-sm"
                 />
                 <button
                   onClick={pickRandom}
                   disabled={locked || busy || !(Number(randomCount) > 0) || room === 0}
-                  className="px-3 py-2 rounded-xl text-sm border border-gray-300 hover:border-black disabled:opacity-40"
+                  className="min-h-10 px-3 py-2 rounded-xl text-sm border border-gray-300 hover:border-black disabled:opacity-40"
                 >
                   Pick N at random
                 </button>
@@ -558,18 +558,18 @@ function CustomSetPage() {
               {selectedIds.length > 0 && (
                 <button
                   onClick={() => setSelected(new Set())}
-                  className="px-3 py-2 rounded-xl text-sm text-gray-500 hover:text-black"
+                  className="min-h-10 px-3 py-2 rounded-xl text-sm text-gray-500 hover:text-black"
                 >
                   Clear selection
                 </button>
               )}
 
-              <div className="flex-1" />
+              <div className="hidden sm:block flex-1" />
 
               <button
                 onClick={addSelected}
                 disabled={locked || busy || selectedIds.length === 0 || selectedIds.length > room}
-                className="px-5 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white disabled:opacity-40"
+                className="min-h-10 w-full sm:w-auto px-5 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white disabled:opacity-40"
               >
                 Add selected ({selectedIds.length})
               </button>
@@ -586,20 +586,20 @@ function CustomSetPage() {
                 const id = String(b.questionId);
                 return (
                   <li key={id}>
-                    <label className="py-3 flex items-start gap-4 cursor-pointer">
+                    <label className="py-3 min-h-11 flex items-start gap-3 sm:gap-4 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selected.has(id)}
                         disabled={locked || busy}
                         onChange={() => toggleSelect(id)}
-                        className="mt-1 w-4 h-4"
+                        className="mt-0.5 w-5 h-5 shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-500 break-words">
                           {[b.subjectName, b.topicName, b.questionCode].filter(Boolean).join(" · ")}
                         </p>
                         <div
-                          className="text-sm text-gray-800 line-clamp-2 prose max-w-none"
+                          className="text-sm text-gray-800 line-clamp-2 prose max-w-none break-words"
                           dangerouslySetInnerHTML={{
                             __html: drawMathInHtml(pickText(b.questionText, lang)),
                           }}

@@ -85,7 +85,7 @@ function CustomResultPage() {
     return (
       <div className="max-w-5xl mx-auto space-y-4">
         <div className="text-red-600 font-medium">{error}</div>
-        <Link to="/custom-set" className="text-indigo-700 font-semibold underline">
+        <Link to="/custom-set" className="text-indigo-700 font-semibold underline inline-flex items-center min-h-10">
           Back to my custom set
         </Link>
       </div>
@@ -108,11 +108,11 @@ function CustomResultPage() {
     });
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6">
       {/* ================= SUMMARY ================= */}
       <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-800 to-indigo-600 px-8 py-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <div className="bg-gradient-to-r from-indigo-800 to-indigo-600 px-5 py-5 sm:px-8 sm:py-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-white text-xl font-bold">🎯 Custom Practice Result</h1>
             <p className="text-indigo-100 text-sm mt-1">
               {questions.length} questions
@@ -122,17 +122,18 @@ function CustomResultPage() {
           </div>
           <Link
             to="/custom-set"
-            className="px-4 py-2 rounded-xl text-sm font-medium bg-white text-indigo-700 hover:opacity-90"
+            className="self-start shrink-0 min-h-10 inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium bg-white text-indigo-700 hover:opacity-90"
           >
-            Back to my set
+            ← Back to my set
           </Link>
         </div>
 
-        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 sm:p-6 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {["correct", "incorrect", "skipped", "unseen"].map((k) => (
             <button
               key={k}
               onClick={() => setFilter(filter === k ? "all" : k)}
+              aria-pressed={filter === k}
               className={`rounded-2xl p-4 text-left transition ring-offset-2 ${STATUS[k].tile} ${
                 filter === k ? "ring-2 ring-indigo-500" : ""
               }`}
@@ -143,7 +144,7 @@ function CustomResultPage() {
           ))}
         </div>
 
-        <div className="px-6 pb-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="px-4 pb-4 sm:px-6 sm:pb-6 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-sm">
           <div className="rounded-2xl border border-gray-200 p-4">
             <p className="text-gray-500">Time taken</p>
             <p className="text-lg font-semibold text-gray-900 tabular-nums">
@@ -177,7 +178,8 @@ function CustomResultPage() {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium border transition ${
+              aria-pressed={filter === f}
+              className={`min-h-10 px-4 py-2 rounded-xl text-sm font-medium border transition ${
                 filter === f
                   ? "bg-black text-white border-black"
                   : "bg-white text-gray-700 border-gray-300 hover:border-black"
@@ -188,9 +190,10 @@ function CustomResultPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="min-h-10 px-1 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
             <input
+              className="w-5 h-5"
               type="checkbox"
               checked={sortBySlowest}
               onChange={(e) => setSortBySlowest(e.target.checked)}
@@ -200,7 +203,8 @@ function CustomResultPage() {
           <div className="flex items-center rounded-xl border border-gray-300 overflow-hidden">
             <button
               onClick={() => changeLang("en")}
-              className={`px-3 py-1.5 text-sm font-medium ${
+              aria-pressed={lang === "en"}
+              className={`min-h-10 px-3 py-1.5 text-sm font-medium ${
                 lang === "en" ? "bg-black text-white" : "bg-white text-gray-600"
               }`}
             >
@@ -208,7 +212,8 @@ function CustomResultPage() {
             </button>
             <button
               onClick={() => changeLang("hi")}
-              className={`px-3 py-1.5 text-sm font-medium ${
+              aria-pressed={lang === "hi"}
+              className={`min-h-10 min-w-10 px-3 py-1.5 text-sm font-medium ${
                 lang === "hi" ? "bg-black text-white" : "bg-white text-gray-600"
               }`}
             >
@@ -220,7 +225,7 @@ function CustomResultPage() {
 
       {/* ================= QUESTIONS ================= */}
       {shown.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-3xl p-10 text-center text-gray-500">
+        <div className="bg-white border border-gray-200 rounded-3xl p-6 sm:p-10 text-center text-gray-500">
           No questions in this group.
         </div>
       ) : (
@@ -229,10 +234,10 @@ function CustomResultPage() {
           const st = STATUS[q.status];
           const hasExplanation = q.explanation?.english || q.explanation?.hindi;
           return (
-            <div key={id} className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div>
-                  <div className="flex items-center gap-3">
+            <div key={id} className="bg-white rounded-3xl border border-gray-200 p-4 sm:p-6 lg:p-8 shadow-sm">
+              <div className="flex items-start justify-between gap-3 sm:gap-4 mb-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     <h3 className="text-lg font-bold text-gray-900">Question {q.questionNumber}</h3>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full ${st.badge}`}>
                       {st.label}
@@ -243,7 +248,7 @@ function CustomResultPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">
+                  <p className="text-xs text-gray-500 mt-2 break-words">
                     {[q.subjectName, q.topicName].filter(Boolean).join(" · ")}
                   </p>
                 </div>
@@ -251,16 +256,16 @@ function CustomResultPage() {
                   <p className="text-sm font-semibold text-gray-900 tabular-nums">
                     ⏱ {formatTime(q.timeSpent)}
                   </p>
-                  <p className="text-xs text-gray-400">time spent</p>
+                  <p className="text-xs text-gray-500">time spent</p>
                 </div>
               </div>
 
               <div
-                className="text-gray-900 leading-7 prose max-w-none"
+                className="text-gray-900 leading-7 prose max-w-none break-words [&_img]:max-w-full [&_img]:h-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
                 dangerouslySetInnerHTML={{ __html: drawMathInHtml(pickText(q.question, lang)) }}
               />
 
-              <div className="mt-6 space-y-3">
+              <div className="mt-5 sm:mt-6 space-y-3">
                 {q.options.map((opt) => {
                   const isCorrect = opt.key === q.correctOption;
                   const isPicked = opt.key === q.selectedOption;
@@ -270,16 +275,16 @@ function CustomResultPage() {
                     ? "border-red-400 bg-red-50"
                     : "border-gray-200";
                   return (
-                    <div key={opt.key} className={`border rounded-2xl p-4 ${tone}`}>
-                      <div className="flex items-start gap-4">
+                    <div key={opt.key} className={`border rounded-2xl p-3 sm:p-4 ${tone}`}>
+                      <div className="flex flex-wrap sm:flex-nowrap items-start gap-x-3 gap-y-1 sm:gap-4">
                         <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center font-medium shrink-0 bg-white">
                           {opt.key}
                         </div>
                         <div
-                          className="prose max-w-none flex-1"
+                          className="prose max-w-none flex-1 min-w-0 break-words pt-0.5 [&_img]:max-w-full [&_img]:h-auto"
                           dangerouslySetInnerHTML={{ __html: drawMathInHtml(pickText(opt.text, lang)) }}
                         />
-                        <div className="text-xs font-medium shrink-0 text-right">
+                        <div className="w-full sm:w-auto pl-11 sm:pl-0 flex sm:block gap-x-3 text-xs font-medium shrink-0 sm:text-right empty:hidden">
                           {isCorrect && <p className="text-green-700">Correct answer</p>}
                           {isPicked && (
                             <p className={isCorrect ? "text-green-700" : "text-red-700"}>Your answer</p>
@@ -292,17 +297,18 @@ function CustomResultPage() {
               </div>
 
               {hasExplanation && (
-                <div className="mt-6">
+                <div className="mt-4 sm:mt-6">
                   <button
                     onClick={() => toggleExplanation(id)}
-                    className="text-sm font-semibold text-indigo-700 hover:underline"
+                    aria-expanded={openExplanations.has(id)}
+                    className="min-h-10 -ml-2 px-2 rounded-lg text-sm font-semibold text-indigo-700 hover:underline"
                   >
                     {openExplanations.has(id) ? "Hide explanation" : "Show explanation"}
                   </button>
                   {openExplanations.has(id) && (
-                    <div className="mt-3 bg-gray-50 rounded-2xl p-5">
+                    <div className="mt-3 bg-gray-50 rounded-2xl p-4 sm:p-5">
                       <div
-                        className="prose max-w-none text-gray-700"
+                        className="prose max-w-none text-gray-700 break-words [&_img]:max-w-full [&_img]:h-auto"
                         dangerouslySetInnerHTML={{ __html: drawMathInHtml(pickText(q.explanation, lang)) }}
                       />
                     </div>
