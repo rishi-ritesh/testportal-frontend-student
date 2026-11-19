@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { loginUser } from "../../services/auth.service";
+import BrandLogo from "../../components/BrandLogo";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -53,12 +54,9 @@ function LoginPage() {
     <div className="w-full max-w-md bg-white rounded-3xl border border-gray-200 shadow-lg p-8">
       {/* Logo */}
       <div className="mb-10">
-        <div className="flex items-center gap-3">
-          <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center text-white text-xl font-bold shadow-sm">
-            T
-          </span>
-          <h1 className="text-3xl font-bold text-gray-900">TestPortal</h1>
-        </div>
+        <h1 className="m-0">
+          <BrandLogo height={56} textClassName="text-3xl" />
+        </h1>
 
         <p className="text-gray-500 mt-4">
           Continue your preparation journey

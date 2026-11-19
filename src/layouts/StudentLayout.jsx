@@ -1,4 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import BrandLogo from "../components/BrandLogo";
+import { BRAND } from "../config/brand";
 
 function StudentLayout() {
   const navigate = useNavigate();
@@ -25,12 +27,9 @@ function StudentLayout() {
         <div className="flex items-center gap-8">
           <button
             onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2.5"
+            aria-label="AdhyayanSetu home"
           >
-            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center text-white font-bold shadow-sm">
-              T
-            </span>
-            <span className="text-xl font-bold text-gray-900">TestPortal</span>
+            <BrandLogo height={36} />
           </button>
 
           <nav className="flex items-center gap-6">
@@ -77,10 +76,8 @@ function StudentLayout() {
       <footer className="bg-white border-t border-gray-200 px-6 py-4">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
           <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
-              T
-            </span>
-            <span>© {new Date().getFullYear()} TestPortal</span>
+            <BrandLogo height={22} showName={false} />
+            <span>© {new Date().getFullYear()} {BRAND.name}</span>
           </div>
           <div className="flex items-center gap-5">
             <span className="hover:text-gray-900 transition cursor-default">About</span>
