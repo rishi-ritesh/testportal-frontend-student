@@ -111,6 +111,8 @@ function AttemptPage({ service } = {}) {
   const [paused, setPaused] = useState(false);
   const [showLeavePrompt, setShowLeavePrompt] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  // phones: the slide-up question list
+  const [showPalette, setShowPalette] = useState(false);
 
   // question language ("en" | "hi") — remembered across questions & reloads
   const [lang, setLang] = useState(
@@ -207,6 +209,16 @@ function AttemptPage({ service } = {}) {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  // Escape closes the phone question list.
+  useEffect(() => {
+    if (!showPalette) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setShowPalette(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showPalette]);
 
   // Native warning on tab close / refresh so it isn't lost by accident.
   useEffect(() => {
@@ -607,64 +619,128 @@ function AttemptPage({ service } = {}) {
     (q) => responses[String(q.questionId)]?.markedForReview
   ).length;
 
+  const sectionLabel = (ATTEMPT_LABEL[attempt?.attemptType] || ATTEMPT_LABEL.practice);
+  const isLastQuestion = questionIndex >= sectionQuestions.length - 1;
+
+  // The question-number grid. Shown beside the question on tablets/desktops and
+  // inside the slide-up "Questions" panel on phones.
+  const renderPalette = (inSheet) => (
+    <>
+      <div className={`grid gap-2 lg:gap-3 ${inSheet ? "grid-cols-5 min-[400px]:grid-cols-6" : "grid-cols-4"}`}>
+        {sectionQuestions.map((q, index) => {
+          const resp = responses[String(q.questionId)];
+          return (
+            <button
+              key={q.questionId}
+              onClick={() => {
+                if (inSheet) setShowPalette(false);
+                goToIndex(index);
+              }}
+              disabled={saving}
+              aria-label={`Question ${q.sectionQuestionNumber}`}
+              aria-current={index === questionIndex ? "true" : undefined}
+              className={paletteBg(resp, index === questionIndex)}
+            >
+              {q.sectionQuestionNumber}
+              {resp?.markedForReview && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-purple-600 border-2 border-white" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className={`mt-6 text-xs text-gray-600 ${inSheet ? "grid grid-cols-2 gap-2" : "space-y-2"}`}>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded bg-green-500 shrink-0" /> Answered
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded bg-orange-400 shrink-0" /> Skipped
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full bg-purple-600 shrink-0" /> Marked
+          for review
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded border border-gray-300 bg-white shrink-0" />{" "}
+          Not visited
+        </div>
+      </div>
+
+      <button
+        onClick={() => {
+          setShowPalette(false);
+          setShowSubmitConfirm(true);
+        }}
+        disabled={saving}
+        className="w-full mt-6 px-4 py-3 rounded-2xl bg-green-600 text-white font-medium disabled:opacity-40"
+      >
+        {isLastSection ? "Submit Test" : "Submit Section"}
+      </button>
+    </>
+  );
+
+  const langButton = (code, short, full) => (
+    <button
+      onClick={() => changeLang(code)}
+      aria-label={full}
+      aria-pressed={lang === code}
+      className={`min-w-10 h-10 px-2 sm:px-3 text-sm font-medium transition ${
+        lang === code
+          ? "bg-black text-white"
+          : "bg-white text-gray-600 hover:text-black"
+      }`}
+    >
+      <span className="sm:hidden">{short}</span>
+      <span className="hidden sm:inline">{full}</span>
+    </button>
+  );
+
   return (
     <>
       {/* ========================= */}
       {/* FIXED TOP BAR */}
       {/* ========================= */}
 
-      <div className="fixed top-0 inset-x-0 z-40 bg-white border-b border-gray-200 shadow-sm">
-        <div className="px-6 h-16 flex items-center justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">
+      <header className="fixed top-0 inset-x-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-[1100px] mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-sm font-semibold text-gray-900 truncate"
+              title={currentSection?.sectionName}
+            >
               {currentSection?.sectionName}
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-500 truncate">
               Section {sectionIndex + 1} / {sections.length}
               {attempt?.attemptType && (
                 <>
                   {" · "}
-                  {(ATTEMPT_LABEL[attempt.attemptType] || ATTEMPT_LABEL.practice).short}
+                  {sectionLabel.short}
                 </>
               )}
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* Language toggle */}
             <div className="flex items-center rounded-xl border border-gray-300 overflow-hidden">
-              <button
-                onClick={() => changeLang("en")}
-                className={`px-3 py-2 text-sm font-medium transition ${
-                  lang === "en"
-                    ? "bg-black text-white"
-                    : "bg-white text-gray-600 hover:text-black"
-                }`}
-              >
-                English
-              </button>
-              <button
-                onClick={() => changeLang("hi")}
-                className={`px-3 py-2 text-sm font-medium transition ${
-                  lang === "hi"
-                    ? "bg-black text-white"
-                    : "bg-white text-gray-600 hover:text-black"
-                }`}
-              >
-                हिंदी
-              </button>
+              {langButton("en", "EN", "English")}
+              {langButton("hi", "हि", "हिंदी")}
             </div>
 
             {/* Countdown */}
             {secondsLeft !== null && (
               <div
-                className={`px-4 py-2 rounded-xl text-sm font-semibold tabular-nums ${
+                className={`h-10 flex items-center px-2 sm:px-4 rounded-xl text-sm font-semibold tabular-nums ${
                   secondsLeft <= 60
                     ? "bg-red-100 text-red-700"
                     : "bg-gray-100 text-gray-800"
                 }`}
               >
-                ⏱ {formatClock(secondsLeft)}
+                <span className="hidden sm:inline" aria-hidden="true">⏱&nbsp;</span>
+                {formatClock(secondsLeft)}
               </div>
             )}
 
@@ -672,22 +748,23 @@ function AttemptPage({ service } = {}) {
             <button
               onClick={handlePause}
               disabled={saving || paused}
-              className="px-4 py-2 rounded-xl text-sm font-medium border border-gray-300 hover:border-black disabled:opacity-40"
+              aria-label="Pause test"
+              className="min-w-10 h-10 px-2 sm:px-4 rounded-xl text-sm font-medium border border-gray-300 hover:border-black disabled:opacity-40"
             >
-              ⏸ Pause
+              ⏸<span className="hidden sm:inline"> Pause</span>
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-12 gap-6 pt-16">
+      <div className="max-w-[1100px] mx-auto pt-14 sm:pt-16 pb-24 md:pb-0 md:grid md:grid-cols-[minmax(0,1fr)_15rem] lg:grid-cols-[minmax(0,1fr)_17rem] gap-4 lg:gap-6 items-start">
       {/* ========================= */}
       {/* LEAVE PROMPT (back button) */}
       {/* ========================= */}
 
       {showLeavePrompt && !paused && (
-        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-white rounded-3xl p-10 text-center max-w-sm mx-4 shadow-xl">
+        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-10 text-center w-full max-w-sm shadow-xl">
             <div className="text-4xl mb-3">⏸</div>
             <h2 className="text-2xl font-bold text-gray-900">Leave the test?</h2>
             <p className="text-gray-500 mt-2">
@@ -719,8 +796,8 @@ function AttemptPage({ service } = {}) {
       {/* ========================= */}
 
       {paused && (
-        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-white rounded-3xl p-10 text-center max-w-sm mx-4 shadow-xl">
+        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-10 text-center w-full max-w-sm shadow-xl">
             <div className="text-4xl mb-3">⏸</div>
             <h2 className="text-2xl font-bold text-gray-900">Test paused</h2>
             <p className="text-gray-500 mt-2">
@@ -748,15 +825,15 @@ function AttemptPage({ service } = {}) {
       {/* ========================= */}
 
       {showSubmitConfirm && (
-        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-white rounded-3xl p-10 max-w-sm mx-4 shadow-xl text-center">
+        <div className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-10 w-full max-w-sm shadow-xl text-center">
             <div className="text-4xl mb-3">{isLastSection ? "🏁" : "📤"}</div>
             <h2 className="text-2xl font-bold text-gray-900">
               {isLastSection ? "Finish the test?" : "Submit this section?"}
             </h2>
 
             {/* Section summary */}
-            <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+            <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3 text-center">
               <div className="rounded-2xl bg-gray-50 p-3">
                 <p className="text-lg font-bold text-gray-900">{sectionQuestions.length}</p>
                 <p className="text-xs text-gray-500">Questions</p>
@@ -805,27 +882,27 @@ function AttemptPage({ service } = {}) {
       {/* QUESTION AREA */}
       {/* ========================= */}
 
-      <div className="col-span-9">
+      <div className="min-w-0">
         {error && (
           <div className="mb-4 text-sm text-red-600">{error}</div>
         )}
 
-        <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 lg:p-8 shadow-sm">
           {/* Header */}
-          <div className="mb-6">
-            <p className="text-sm text-gray-500">
+          <div className="mb-5 sm:mb-6">
+            <p className="text-sm text-gray-500 break-words">
               {currentSection.sectionName}
               <span className="text-gray-300"> · </span>
               {currentQuestion.subjectName}
               {attempt?.attemptType && (
                 <>
                   <span className="text-gray-300"> · </span>
-                  {(ATTEMPT_LABEL[attempt.attemptType] || ATTEMPT_LABEL.practice).long}
+                  {sectionLabel.long}
                 </>
               )}
             </p>
 
-            <h2 className="text-xl font-bold text-gray-900 mt-1">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mt-1">
               Question {currentQuestion.sectionQuestionNumber}
               <span className="text-gray-400 text-base font-medium">
                 {" "}
@@ -841,27 +918,27 @@ function AttemptPage({ service } = {}) {
 
           {/* Question */}
           <div
-            className="text-gray-900 leading-7 prose max-w-none"
+            className="text-gray-900 leading-7 prose max-w-none break-words [&_img]:max-w-full [&_img]:h-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
             dangerouslySetInnerHTML={{
               __html: drawMathInHtml(pickText(currentQuestion.question, lang)),
             }}
           />
 
           {/* Options */}
-          <div className="mt-8 space-y-4">
+          <div className="mt-6 sm:mt-8 space-y-3 sm:space-y-4">
             {currentQuestion.options.map((option) => {
               const active = selectedKey === option.key;
               return (
                 <button
                   key={option.key}
                   onClick={() => selectOption(option.key)}
-                  className={`w-full text-left border rounded-2xl p-4 transition ${
+                  className={`w-full text-left border rounded-2xl p-3 sm:p-4 transition ${
                     active
                       ? "border-black bg-gray-50"
                       : "border-gray-200 hover:border-black"
                   }`}
                 >
-                  <div className="flex items-start gap-4">
+                  <div className="flex items-start gap-3 sm:gap-4">
                     <div
                       className={`w-8 h-8 rounded-full border flex items-center justify-center font-medium shrink-0 ${
                         active
@@ -873,7 +950,7 @@ function AttemptPage({ service } = {}) {
                     </div>
 
                     <div
-                      className="prose max-w-none"
+                      className="prose max-w-none min-w-0 flex-1 break-words pt-0.5 [&_img]:max-w-full [&_img]:h-auto"
                       dangerouslySetInnerHTML={{
                         __html: drawMathInHtml(pickText(option.text, lang)),
                       }}
@@ -884,8 +961,19 @@ function AttemptPage({ service } = {}) {
             })}
           </div>
 
-          {/* Action row */}
-          <div className="flex flex-wrap items-center gap-3 mt-10">
+          {/* Clear (phones — the other actions live in the bottom bar) */}
+          <div className="md:hidden flex justify-end mt-4">
+            <button
+              onClick={handleClearResponse}
+              disabled={saving || !selectedKey}
+              className="min-h-10 px-4 rounded-xl border border-gray-300 text-sm font-medium disabled:opacity-40"
+            >
+              Clear response
+            </button>
+          </div>
+
+          {/* Action row (tablets: 2 x 2 grid; desktops: one row) */}
+          <div className="hidden md:grid grid-cols-2 gap-3 mt-8 lg:flex lg:flex-wrap lg:items-center lg:mt-10">
             <button
               onClick={handleClearResponse}
               disabled={saving || !selectedKey}
@@ -906,7 +994,7 @@ function AttemptPage({ service } = {}) {
               {isMarked ? "Unmark for Review" : "Mark for Review"}
             </button>
 
-            <div className="flex-1" />
+            <div className="hidden lg:block flex-1" />
 
             <button
               disabled={saving || questionIndex === 0}
@@ -916,7 +1004,7 @@ function AttemptPage({ service } = {}) {
               Previous
             </button>
 
-            {questionIndex < sectionQuestions.length - 1 ? (
+            {!isLastQuestion ? (
               <button
                 disabled={saving}
                 onClick={handleSaveNext}
@@ -938,12 +1026,12 @@ function AttemptPage({ service } = {}) {
       </div>
 
       {/* ========================= */}
-      {/* QUESTION PALETTE */}
+      {/* QUESTION PALETTE (tablets / desktops) */}
       {/* ========================= */}
 
-      <div className="col-span-3">
-        <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm sticky top-20">
-          <div className="flex items-center justify-between mb-1">
+      <aside className="hidden md:block min-w-0 sticky top-20">
+        <div className="bg-white rounded-3xl border border-gray-200 p-4 lg:p-6 shadow-sm max-h-[calc(100vh-6rem)] overflow-y-auto">
+          <div className="flex items-center justify-between gap-2 mb-1">
             <h3 className="text-lg font-bold">
               Section {sectionIndex + 1}
               <span className="text-gray-400 font-medium">
@@ -951,62 +1039,131 @@ function AttemptPage({ service } = {}) {
                 / {sections.length}
               </span>
             </h3>
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-500 shrink-0">
               {totalQuestions} total
             </span>
           </div>
 
-          <p className="text-xs text-gray-400 mb-5">
+          <p className="text-xs text-gray-500 mb-5 break-words">
             {currentSection.sectionName}
           </p>
 
-          <div className="grid grid-cols-4 gap-3">
-            {sectionQuestions.map((q, index) => {
-              const resp = responses[String(q.questionId)];
-              return (
-                <button
-                  key={q.questionId}
-                  onClick={() => goToIndex(index)}
-                  disabled={saving}
-                  className={paletteBg(resp, index === questionIndex)}
-                >
-                  {q.sectionQuestionNumber}
-                  {resp?.markedForReview && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-purple-600 border-2 border-white" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {renderPalette(false)}
+        </div>
+      </aside>
+      </div>
 
-          {/* Legend */}
-          <div className="mt-6 space-y-2 text-xs text-gray-600">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-green-500" /> Answered
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-orange-400" /> Skipped
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-purple-600" /> Marked
-              for review
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded border border-gray-300 bg-white" />{" "}
-              Not visited
-            </div>
-          </div>
+      {/* ========================= */}
+      {/* PHONE BOTTOM BAR */}
+      {/* ========================= */}
+
+      <nav
+        aria-label="Question navigation"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)]"
+      >
+        <div className="grid grid-cols-4 gap-1.5 px-2 py-2">
+          <button
+            disabled={saving || questionIndex === 0}
+            onClick={() => goToIndex(questionIndex - 1)}
+            className="min-h-12 rounded-xl border border-gray-300 flex flex-col items-center justify-center leading-tight disabled:opacity-40"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+            <span className="text-xs font-medium">Previous</span>
+          </button>
 
           <button
-            onClick={() => setShowSubmitConfirm(true)}
-            disabled={saving}
-            className="w-full mt-6 px-4 py-3 rounded-2xl bg-green-600 text-white font-medium disabled:opacity-40"
+            onClick={() => setShowPalette(true)}
+            aria-haspopup="dialog"
+            aria-label={`Questions — ${currentQuestion.sectionQuestionNumber} of ${sectionQuestions.length}`}
+            className="min-h-12 rounded-xl border border-gray-300 bg-gray-50 flex flex-col items-center justify-center leading-tight"
           >
-            {isLastSection ? "Submit Test" : "Submit Section"}
+            <span className="text-sm font-bold tabular-nums">
+              {currentQuestion.sectionQuestionNumber}/{sectionQuestions.length}
+            </span>
+            <span className="text-xs font-medium text-gray-600">Questions</span>
           </button>
+
+          <button
+            onClick={handleToggleMark}
+            disabled={saving}
+            aria-pressed={isMarked}
+            className={`min-h-12 rounded-xl border flex flex-col items-center justify-center leading-tight disabled:opacity-40 ${
+              isMarked
+                ? "border-purple-500 bg-purple-100 text-purple-800"
+                : "border-purple-400 text-purple-700"
+            }`}
+          >
+            <span aria-hidden="true" className="text-base">⚑</span>
+            <span className="text-xs font-medium">{isMarked ? "Unmark" : "Mark Review"}</span>
+          </button>
+
+          {!isLastQuestion ? (
+            <button
+              disabled={saving}
+              onClick={handleSaveNext}
+              className="min-h-12 rounded-xl bg-black text-white flex flex-col items-center justify-center leading-tight disabled:opacity-40"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+              <span className="text-xs font-medium">Save &amp; Next</span>
+            </button>
+          ) : (
+            <button
+              disabled={saving}
+              onClick={() => setShowSubmitConfirm(true)}
+              className="min-h-12 rounded-xl bg-green-600 text-white flex flex-col items-center justify-center leading-tight disabled:opacity-40"
+            >
+              <span aria-hidden="true" className="text-base">✓</span>
+              <span className="text-xs font-medium">{isLastSection ? "Submit" : "Submit Sec."}</span>
+            </button>
+          )}
         </div>
-      </div>
-      </div>
+      </nav>
+
+      {/* ========================= */}
+      {/* PHONE QUESTION PANEL (slide-up) */}
+      {/* ========================= */}
+
+      {showPalette && (
+        <div
+          className="md:hidden fixed inset-0 z-50 flex items-end bg-gray-900/50"
+          onClick={() => setShowPalette(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Questions in this section"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full bg-white rounded-t-3xl shadow-xl max-h-[85vh] overflow-y-auto px-4 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] animate-[sheet-up_200ms_ease-out] motion-reduce:animate-none"
+          >
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-300" aria-hidden="true" />
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold">
+                  Questions {currentQuestion.sectionQuestionNumber}/{sectionQuestions.length}
+                </h3>
+                <p className="text-xs text-gray-500 truncate">
+                  Section {sectionIndex + 1} / {sections.length} · {currentSection.sectionName}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPalette(false)}
+                aria-label="Close question list"
+                className="w-11 h-11 shrink-0 -mr-2 -mt-1 flex items-center justify-center rounded-xl text-gray-700 hover:bg-gray-100"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+
+            {renderPalette(true)}
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -46,7 +46,7 @@ function AppRoutes() {
                 path="/attempt/:attemptId"
                 element={
                     <ProtectedRoute>
-                        <div className="min-h-screen bg-gray-100 p-6">
+                        <div className="min-h-screen bg-gray-100 p-3 sm:p-6">
                             <AttemptPage />
                         </div>
                     </ProtectedRoute>
@@ -58,7 +58,7 @@ function AppRoutes() {
                 path="/custom-set/attempt"
                 element={
                     <ProtectedRoute>
-                        <div className="min-h-screen bg-gray-100 p-6">
+                        <div className="min-h-screen bg-gray-100 p-3 sm:p-6">
                             <AttemptPage service={customAttemptService} />
                         </div>
                     </ProtectedRoute>

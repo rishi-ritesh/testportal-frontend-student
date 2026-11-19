@@ -23,3 +23,9 @@
   overflow-x: auto;
   overflow-y: hidden;
 }
+
+/* ---- test screen: phone question list slides up ---- */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
