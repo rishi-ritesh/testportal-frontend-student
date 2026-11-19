@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   getTestById,
   getNextAttemptInfo,
+  getPublishedTests,
   startAttempt,
 } from "../../services/test.service";
 
@@ -16,16 +17,22 @@ function InstructionsPage() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
+  // a completed practice attempt exists → starting again replaces it
+  const [hasPracticeResult, setHasPracticeResult] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [testData, infoData] = await Promise.all([
+        const [testData, infoData, tests] = await Promise.all([
           getTestById(testId),
           getNextAttemptInfo(testId).catch(() => null),
+          getPublishedTests().catch(() => []),
         ]);
         setTest(testData);
         setNextInfo(infoData);
+        const mine = tests.find((t) => String(t.id) === String(testId));
+        setHasPracticeResult(mine?.attempt?.practice?.status === "completed");
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load test");
       } finally {
@@ -36,6 +43,18 @@ function InstructionsPage() {
   }, [testId]);
 
   const handleStart = async () => {
+    // a new practice attempt would replace the finished one — ask first
+    // (not for the first practice attempt, and not when resuming)
+    if (
+      nextInfo?.nextType === "practice" &&
+      !nextInfo.resuming &&
+      hasPracticeResult &&
+      !confirmReplace
+    ) {
+      setConfirmReplace(true);
+      return;
+    }
+    setConfirmReplace(false);
     try {
       setStarting(true);
       const data = await startAttempt(testId);
@@ -103,16 +122,50 @@ function InstructionsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* ================= REPLACE PRACTICE RESULT? ================= */}
+      {confirmReplace && (
+        <div
+          className="fixed inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Replace your practice result?"
+        >
+          <div className="bg-white rounded-3xl p-6 sm:p-10 w-full max-w-sm shadow-xl text-center">
+            <div className="text-4xl mb-3">🔁</div>
+            <h2 className="text-xl font-bold text-gray-900">Start a new practice attempt?</h2>
+            <p className="text-gray-600 mt-3">
+              Your previous practice result will be replaced. Your ranked result stays.
+            </p>
+            <div className="mt-6 space-y-3">
+              <button
+                onClick={handleStart}
+                disabled={starting}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-medium disabled:opacity-50"
+              >
+                {starting ? "Starting..." : "Continue"}
+              </button>
+              <button
+                onClick={() => setConfirmReplace(false)}
+                disabled={starting}
+                className="w-full border border-gray-300 py-3 rounded-2xl font-medium hover:border-black disabled:opacity-40"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= HEADER ================= */}
       <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-8 py-7">
+        <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-5 py-5 sm:px-8 sm:py-7">
           <p className="text-blue-100 text-sm font-medium">Mock Test</p>
           <h1 className="text-2xl md:text-3xl font-bold text-white mt-1">
             {test.title}
           </h1>
         </div>
 
-        <div className="p-8">
+        <div className="p-5 sm:p-8">
           {banner && (
             <div className={`rounded-2xl border p-5 ${toneClasses}`}>
               <p className="font-semibold">{banner.title}</p>
@@ -153,7 +206,7 @@ function InstructionsPage() {
           </h2>
         </div>
 
-        <div className="p-8">
+        <div className="p-5 sm:p-8">
           <ul className="space-y-4 text-gray-700">
             <li className="flex gap-3">
               <span className="text-blue-600">•</span> Your answers are saved
@@ -180,7 +233,7 @@ function InstructionsPage() {
           <button
             onClick={handleStart}
             disabled={starting}
-            className="mt-8 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-2xl font-medium transition disabled:opacity-50"
+            className="mt-8 w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-2xl font-medium transition disabled:opacity-50"
           >
             {buttonLabel}
           </button>

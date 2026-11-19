@@ -1,12 +1,12 @@
-import { useNavigate } from "react-router-dom";
+import MockActions, { MockStatusLabel } from "../MockActions";
 
 function TestCard({ test }) {
-    const navigate = useNavigate();
     return (
         <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition">
             {/* Title */}
             <h2 className="text-xl font-semibold text-gray-900">
-                {test.title}
+                {test.title}{" "}
+                <MockStatusLabel attempt={test.attempt} />
             </h2>
 
             {/* Info */}
@@ -33,27 +33,10 @@ function TestCard({ test }) {
                 </p>
             </div>
 
-            {/* Button */}
-            <button
-                onClick={() =>
-                    navigate(
-                        `/test/${test.id}/instructions`
-                    )
-                }
-                className="
-          mt-6
-          w-full
-          bg-black
-          text-white
-          py-3
-          rounded-2xl
-          font-medium
-          hover:opacity-90
-          transition
-        "
-            >
-                Start Test
-            </button>
+            {/* Start / Resume / View Result + Re-attempt */}
+            <div className="mt-6">
+                <MockActions testId={test.id} attempt={test.attempt} full />
+            </div>
         </div>
     );
 }

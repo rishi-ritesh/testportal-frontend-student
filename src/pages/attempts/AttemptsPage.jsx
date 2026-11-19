@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { getMyAttempts } from "../../services/test.service";
+import { instructionsPath } from "../../lib/attemptActions";
 
 const PAGE_SIZE = 10;
 
@@ -79,7 +80,7 @@ function AttemptsPage() {
   return (
     <div className="max-w-5xl mx-auto">
       <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-green-700 to-green-500 px-6 py-5 flex items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-green-700 to-green-500 px-4 py-4 sm:px-6 sm:py-5 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
           <h1 className="text-white text-lg font-bold tracking-wide flex items-center gap-3">
             <span className="text-2xl">🏆</span>
             MY ATTEMPTS
@@ -93,7 +94,7 @@ function AttemptsPage() {
               setSeriesFilter(e.target.value);
               setPage(1);
             }}
-            className="min-h-10 max-w-full rounded-xl px-3 py-2 text-sm outline-none w-48 md:w-64 bg-white text-gray-700"
+            className="min-h-10 max-w-full rounded-xl px-3 py-2 text-sm outline-none w-full sm:w-48 md:w-64 bg-white text-gray-700"
           >
             <option value="all">All test series</option>
             {seriesOptions.map((s) => (
@@ -117,9 +118,9 @@ function AttemptsPage() {
               return (
                 <div
                   key={a.attemptId}
-                  className="px-6 py-4 flex items-center justify-between gap-4"
+                  className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 w-full sm:w-auto">
                     <p className="font-semibold text-gray-900 truncate">
                       {(currentPage - 1) * PAGE_SIZE + i + 1}. {a.testTitle}
                     </p>
@@ -145,22 +146,32 @@ function AttemptsPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() =>
-                      navigate(
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto shrink-0">
+                    <button
+                      onClick={() =>
+                        navigate(
+                          isCompleted
+                            ? `/result/${a.attemptId}`
+                            : `/attempt/${a.attemptId}`
+                        )
+                      }
+                      className={`flex-1 sm:flex-none min-h-10 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition text-white ${
                         isCompleted
-                          ? `/result/${a.attemptId}`
-                          : `/attempt/${a.attemptId}`
-                      )
-                    }
-                    className={`shrink-0 min-h-10 px-4 py-2 rounded-lg text-sm font-medium transition text-white ${
-                      isCompleted
-                        ? "bg-green-600 hover:bg-green-700"
-                        : "bg-gray-900 hover:opacity-90"
-                    }`}
-                  >
-                    {isCompleted ? "View Report" : "Resume"}
-                  </button>
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-900 hover:opacity-90"
+                      }`}
+                    >
+                      {isCompleted ? "View Report" : "Resume"}
+                    </button>
+                    {isCompleted && a.testId && (
+                      <button
+                        onClick={() => navigate(instructionsPath(a.testId))}
+                        className="flex-1 sm:flex-none min-h-10 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap border border-green-600 text-green-700 hover:bg-green-50 transition"
+                      >
+                        Re-attempt
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

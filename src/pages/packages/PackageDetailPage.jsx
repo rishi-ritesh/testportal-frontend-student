@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { getPackageById } from "../../services/test.service";
+import MockActions, { MockStatusLabel } from "../../components/MockActions";
 
 function PackageDetailPage() {
   const { id } = useParams();
@@ -44,7 +45,7 @@ function PackageDetailPage() {
 
       {/* ================= SERIES HEADER ================= */}
       <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-8 py-7 flex items-start justify-between gap-4">
+        <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-5 py-5 sm:px-8 sm:py-7 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-blue-100 text-sm font-medium">{pkg.type}</p>
             <h1 className="text-2xl md:text-3xl font-bold text-white mt-1">
@@ -57,7 +58,7 @@ function PackageDetailPage() {
         </div>
 
         {pkg.description && (
-          <p className="text-gray-500 px-8 py-5">{pkg.description}</p>
+          <p className="text-gray-500 px-5 sm:px-8 py-5">{pkg.description}</p>
         )}
       </section>
 
@@ -79,11 +80,12 @@ function PackageDetailPage() {
             {pkg.mocks.map((mock, i) => (
               <div
                 key={mock.id}
-                className="px-6 py-4 flex items-center justify-between gap-4"
+                className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4"
               >
-                <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 truncate">
-                    {i + 1}. {mock.title}
+                <div className="min-w-0 w-full sm:w-auto">
+                  <p className="font-semibold text-gray-900 break-words">
+                    {i + 1}. {mock.title}{" "}
+                    <MockStatusLabel attempt={mock.attempt} />
                   </p>
                   <p className="text-sm text-gray-500 mt-1">
                     {mock.totalQuestions} Q
@@ -95,12 +97,7 @@ function PackageDetailPage() {
                   </p>
                 </div>
 
-                <button
-                  onClick={() => navigate(`/test/${mock.id}/instructions`)}
-                  className="shrink-0 min-h-10 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                >
-                  Attempt Test
-                </button>
+                <MockActions testId={mock.id} attempt={mock.attempt} />
               </div>
             ))}
           </div>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { getResult } from "../../services/test.service";
+import { getMyAttempts, getResult } from "../../services/test.service";
+import { instructionsPath } from "../../lib/attemptActions";
 import SolutionsPanel from "./SolutionsPanel";
 
 // =========================
@@ -65,6 +66,8 @@ function ResultPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("analysis");
+  // the test this result belongs to (for "Re-attempt this test")
+  const [testId, setTestId] = useState(null);
 
   useEffect(() => {
     const fetchResult = async () => {
@@ -81,6 +84,15 @@ function ResultPage() {
     };
 
     fetchResult();
+  }, [attemptId]);
+
+  useEffect(() => {
+    getMyAttempts()
+      .then((list) => {
+        const mine = list.find((a) => String(a.attemptId) === String(attemptId));
+        setTestId(mine?.testId || null);
+      })
+      .catch(() => {});
   }, [attemptId]);
 
   if (loading) {
@@ -114,12 +126,22 @@ function ResultPage() {
             </h1>
           </div>
 
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="shrink-0 self-start min-h-10 bg-white/15 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/25 transition"
-          >
-            ← Back to Dashboard
-          </button>
+          <div className="flex flex-wrap gap-2 shrink-0 self-start">
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="min-h-10 bg-white/15 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/25 transition"
+            >
+              ← Back to Dashboard
+            </button>
+            {result.status === "completed" && testId && (
+              <button
+                onClick={() => navigate(instructionsPath(testId))}
+                className="min-h-10 bg-white text-green-800 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition"
+              >
+                Re-attempt this test
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5 p-4 sm:p-8">

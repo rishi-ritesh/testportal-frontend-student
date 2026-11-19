@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { instructionsPath } from "../../lib/attemptActions";
 
 const STATUS_BADGE = {
   completed: "bg-green-100 text-green-700",
@@ -104,6 +105,15 @@ function AttemptCard({ attempt }) {
       >
         {isCompleted ? "View Result" : "Resume Test"}
       </button>
+
+      {isCompleted && attempt.testId && (
+        <button
+          onClick={() => navigate(instructionsPath(attempt.testId))}
+          className="mt-3 w-full py-3 rounded-2xl font-medium border border-blue-600 text-blue-700 hover:bg-blue-50 transition"
+        >
+          Re-attempt
+        </button>
+      )}
     </div>
   );
 }
