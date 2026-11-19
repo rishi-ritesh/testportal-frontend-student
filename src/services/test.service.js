@@ -92,41 +92,54 @@ export const saveAnswer = async (
   return response.data;
 };
 
+// `extra` carries the test screen's sessionId (one open screen per attempt)
 export const submitSection =
-  async (attemptId) => {
+  async (attemptId, extra = {}) => {
 
     const response = await api.post(
       "/api/student/attempt/submit-section",
       {
-        attemptId
+        attemptId,
+        ...extra
       }
     );
 
     return response.data;
   };
 
-export const pauseAttempt = async (attemptId, remainingSeconds) => {
+export const pauseAttempt = async (attemptId, remainingSeconds, extra = {}) => {
   const response = await api.post(
     "/api/student/attempt/pause",
-    { attemptId, remainingSeconds }
+    { attemptId, remainingSeconds, ...extra }
   );
 
   return response.data;
 };
 
-export const syncTimer = async (attemptId, remainingSeconds) => {
+export const syncTimer = async (attemptId, remainingSeconds, extra = {}) => {
   const response = await api.post(
     "/api/student/attempt/timer",
-    { attemptId, remainingSeconds }
+    { attemptId, remainingSeconds, ...extra }
   );
 
   return response.data;
 };
 
-export const resumeAttempt = async (attemptId) => {
+export const resumeAttempt = async (attemptId, extra = {}) => {
   const response = await api.post(
     "/api/student/attempt/resume",
-    { attemptId }
+    { attemptId, ...extra }
+  );
+
+  return response.data;
+};
+
+// The test screen registers itself when it opens. 409 OTHER_SESSION = the
+// test is open in another tab/device; takeover = "Continue here".
+export const registerAttemptSession = async (attemptId, sessionId, takeover = false) => {
+  const response = await api.post(
+    "/api/student/attempt/session",
+    { attemptId, sessionId, takeover }
   );
 
   return response.data;
@@ -205,17 +218,21 @@ export const getCustomSetResult = async () => {
 // pointed at the custom set. AttemptPage receives this as its `service` prop.
 export const customAttemptService = {
   getState: async () => (await api.get("/api/student/custom-set/attempt")).data,
+  registerSession: async (sessionId, takeover = false) =>
+    (await api.post("/api/student/custom-set/attempt/session", { sessionId, takeover })).data,
   saveAnswer: async (payload) =>
     (await api.post("/api/student/custom-set/attempt/save-answer", payload)).data,
-  submit: async (remainingSeconds) =>
-    (await api.post("/api/student/custom-set/attempt/submit", { remainingSeconds })).data,
-  pause: async (remainingSeconds) =>
-    (await api.post("/api/student/custom-set/attempt/pause", { remainingSeconds })).data,
-  resume: async () => (await api.post("/api/student/custom-set/attempt/resume")).data,
-  syncTimer: async (remainingSeconds) =>
-    (await api.post("/api/student/custom-set/attempt/timer", { remainingSeconds })).data,
-  // used for the best-effort timer save when the tab closes
+  submit: async (remainingSeconds, extra = {}) =>
+    (await api.post("/api/student/custom-set/attempt/submit", { remainingSeconds, ...extra })).data,
+  pause: async (remainingSeconds, extra = {}) =>
+    (await api.post("/api/student/custom-set/attempt/pause", { remainingSeconds, ...extra })).data,
+  resume: async (extra = {}) =>
+    (await api.post("/api/student/custom-set/attempt/resume", extra)).data,
+  syncTimer: async (remainingSeconds, extra = {}) =>
+    (await api.post("/api/student/custom-set/attempt/timer", { remainingSeconds, ...extra })).data,
+  // used for the best-effort saves when the tab is hidden or closes
   timerUrl: `${api.defaults.baseURL}/api/student/custom-set/attempt/timer`,
+  saveUrl: `${api.defaults.baseURL}/api/student/custom-set/attempt/save-answer`,
   resultPath: "/custom-set/result",
   leavePath: "/custom-set",
 };
