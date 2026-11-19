@@ -51,11 +51,11 @@ function LoginPage() {
   };
 
   return (
-    <div className="w-full max-w-md bg-white rounded-3xl border border-gray-200 shadow-lg p-8">
+    <div className="w-full max-w-md bg-white rounded-3xl border border-gray-200 shadow-lg p-6 sm:p-8">
       {/* Logo */}
-      <div className="mb-10">
+      <div className="mb-8 sm:mb-10">
         <h1 className="m-0">
-          <BrandLogo height={56} textClassName="text-3xl" />
+          <BrandLogo height={56} smallHeight={40} textClassName="text-2xl sm:text-3xl" />
         </h1>
 
         <p className="text-gray-500 mt-4">
