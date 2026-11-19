@@ -93,7 +93,7 @@ function AttemptsPage() {
               setSeriesFilter(e.target.value);
               setPage(1);
             }}
-            className="rounded-xl px-3 py-2 text-sm outline-none w-48 md:w-64 bg-white text-gray-700"
+            className="min-h-10 max-w-full rounded-xl px-3 py-2 text-sm outline-none w-48 md:w-64 bg-white text-gray-700"
           >
             <option value="all">All test series</option>
             {seriesOptions.map((s) => (
@@ -153,7 +153,7 @@ function AttemptsPage() {
                           : `/attempt/${a.attemptId}`
                       )
                     }
-                    className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition text-white ${
+                    className={`shrink-0 min-h-10 px-4 py-2 rounded-lg text-sm font-medium transition text-white ${
                       isCompleted
                         ? "bg-green-600 hover:bg-green-700"
                         : "bg-gray-900 hover:opacity-90"
@@ -172,7 +172,7 @@ function AttemptsPage() {
             <button
               onClick={() => setPage(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="px-4 py-2 rounded-lg text-sm border border-gray-300 disabled:opacity-40 hover:border-black transition"
+              className="min-h-10 px-4 py-2 rounded-lg text-sm border border-gray-300 disabled:opacity-40 hover:border-black transition"
             >
               ← Prev
             </button>
@@ -182,7 +182,7 @@ function AttemptsPage() {
             <button
               onClick={() => setPage(currentPage + 1)}
               disabled={currentPage >= totalPages}
-              className="px-4 py-2 rounded-lg text-sm border border-gray-300 disabled:opacity-40 hover:border-black transition"
+              className="min-h-10 px-4 py-2 rounded-lg text-sm border border-gray-300 disabled:opacity-40 hover:border-black transition"
             >
               Next →
             </button>

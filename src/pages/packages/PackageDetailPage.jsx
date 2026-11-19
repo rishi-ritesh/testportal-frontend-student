@@ -37,7 +37,7 @@ function PackageDetailPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       <button
         onClick={() => navigate("/dashboard", { replace: true })}
-        className="text-sm text-gray-500 hover:text-gray-900 transition"
+        className="min-h-10 inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition"
       >
         ← Back to Dashboard
       </button>
@@ -97,7 +97,7 @@ function PackageDetailPage() {
 
                 <button
                   onClick={() => navigate(`/test/${mock.id}/instructions`)}
-                  className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                  className="shrink-0 min-h-10 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
                 >
                   Attempt Test
                 </button>

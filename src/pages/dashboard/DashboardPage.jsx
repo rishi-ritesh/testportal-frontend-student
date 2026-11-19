@@ -116,7 +116,7 @@ function DashboardPage() {
 
                   <button
                     onClick={() => navigate(`/packages/${pkg._id}`)}
-                    className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                    className="shrink-0 min-h-10 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
                   >
                     View Series
                   </button>
@@ -193,7 +193,7 @@ function DashboardPage() {
                             : `/attempt/${a.attemptId}`
                         )
                       }
-                      className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition text-white ${
+                      className={`shrink-0 min-h-10 px-4 py-2 rounded-lg text-sm font-medium transition text-white ${
                         isCompleted
                           ? "bg-green-600 hover:bg-green-700"
                           : "bg-gray-900 hover:opacity-90"

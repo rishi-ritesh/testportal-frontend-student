@@ -65,7 +65,7 @@ function SeriesPage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="rounded-xl px-3 py-2 text-sm outline-none w-44 md:w-56"
+            className="min-h-10 rounded-xl px-3 py-2 text-sm outline-none w-44 md:w-56"
           />
         </div>
 
@@ -94,7 +94,7 @@ function SeriesPage() {
                 </div>
                 <button
                   onClick={() => navigate(`/packages/${pkg._id}`)}
-                  className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                  className="shrink-0 min-h-10 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
                 >
                   View Series
                 </button>
@@ -108,7 +108,7 @@ function SeriesPage() {
             <button
               onClick={() => setPage(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="px-4 py-2 rounded-lg text-sm border border-gray-300 disabled:opacity-40 hover:border-black transition"
+              className="min-h-10 px-4 py-2 rounded-lg text-sm border border-gray-300 disabled:opacity-40 hover:border-black transition"
             >
               ← Prev
             </button>
@@ -118,7 +118,7 @@ function SeriesPage() {
             <button
               onClick={() => setPage(currentPage + 1)}
               disabled={currentPage >= totalPages}
-              className="px-4 py-2 rounded-lg text-sm border border-gray-300 disabled:opacity-40 hover:border-black transition"
+              className="min-h-10 px-4 py-2 rounded-lg text-sm border border-gray-300 disabled:opacity-40 hover:border-black transition"
             >
               Next →
             </button>
