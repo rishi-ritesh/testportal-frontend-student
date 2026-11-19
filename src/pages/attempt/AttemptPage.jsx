@@ -25,6 +25,7 @@ import api from "../../api/axios";
 import { drawMathInHtml } from "../../lib/math";
 import {
   createSaveQueue,
+  currentUserId,
   isNetworkError,
   isOtherSessionError,
 } from "../../lib/saveQueue";
@@ -128,6 +129,13 @@ const NET_ERROR_TEXT =
   "Can't reach the server. Your answers are kept on this device; please check your internet.";
 const OFFLINE_TEXT = "Offline – answers will be saved when you're back online";
 const CONFLICT_TEXT = "This test was opened in another tab or device. Continue here?";
+// why queued saves were dropped (see lib/saveQueue.js)
+const DROPPED_TEXT = {
+  other_user:
+    "You're no longer signed in as the student taking this test on this device. Unsent answers were not sent.",
+  signed_out: "Your login has expired. Please sign in again to continue this test.",
+  gone: "This test is no longer available. Its unsent answers were removed from this device.",
+};
 
 // Default server calls for ranked / practice attempts — the calls this screen
 // has always made. A custom practice set passes its own `service` with the
@@ -196,6 +204,8 @@ function AttemptPage({ service } = {}) {
   const [conflict, setConflict] = useState(null);
   // null | message while time is up and the section is being submitted
   const [timeUp, setTimeUp] = useState(null);
+  // null | "other_user" | "signed_out" | "gone" — saving stopped for good on this screen
+  const [dropped, setDropped] = useState(null);
 
   // question language ("en" | "hi") — remembered across questions & reloads
   const [lang, setLang] = useState(
@@ -253,7 +263,8 @@ function AttemptPage({ service } = {}) {
 
   // clock and per-question time stop while paused, while another screen owns
   // the test, and while time is up
-  const frozen = paused || Boolean(conflict) || Boolean(timeUp) || loading;
+  const frozen =
+    paused || Boolean(conflict) || Boolean(timeUp) || Boolean(dropped) || loading;
 
   useEffect(() => {
     frozenRef.current = frozen;
@@ -362,20 +373,26 @@ function AttemptPage({ service } = {}) {
         let data = await svc.getState();
         if (stale()) return;
 
-        // already finished → straight to result
-        if (data.status === "completed") {
-          finishAndShowResult();
-          return;
-        }
-
         // one save queue per attempt, kept on this device
         const key = isCustom
           ? `testSaveQueue:custom:${data.startedAt}`
           : `testSaveQueue:${attemptId}`;
+
+        // already finished → straight to result (nothing left to keep here)
+        if (data.status === "completed") {
+          try {
+            localStorage.removeItem(key);
+          } catch {
+            /* ignore */
+          }
+          finishAndShowResult();
+          return;
+        }
         if (!queueRef.current || queueRef.current.storageKey !== key) {
           queueRef.current?.destroy();
           queueRef.current = createSaveQueue({
             storageKey: key,
+            owner: currentUserId(),
             send: (item) =>
               svc.saveAnswer({
                 ...item.payload,
@@ -384,6 +401,13 @@ function AttemptPage({ service } = {}) {
               }),
             onChange: (s) => setQueueState({ pending: s.pending, sending: s.sending }),
             onConflict: () => setConflict("lost"),
+            onDropped: (reason) => {
+              if (reason === "other_user" || reason === "signed_out") {
+                setDropped(reason);
+              } else if (reason === "attempt_over") {
+                refreshFromServerRef.current?.(); // finished elsewhere → result
+              }
+            },
           });
         }
         const queue = queueRef.current;
@@ -440,6 +464,8 @@ function AttemptPage({ service } = {}) {
     };
   }, [openScreen]);
 
+  const refreshFromServerRef = useRef(null);
+
   // Back on the tab: other screens / devices may have changed things.
   const refreshFromServer = useCallback(async () => {
     const queue = queueRef.current;
@@ -462,10 +488,18 @@ function AttemptPage({ service } = {}) {
         // the clock never goes up
         setSecondsLeft((prev) => (prev == null ? server : Math.min(prev, server)));
       }
-    } catch {
+    } catch (err) {
+      if (err?.response?.status === 404) {
+        queueRef.current?.clear();
+        setDropped("gone");
+      }
       /* offline — keep what we have */
     }
   }, [svc, applyState, finishAndShowResult]);
+
+  useEffect(() => {
+    refreshFromServerRef.current = refreshFromServer;
+  }, [refreshFromServer]);
 
   // =========================
   // LEAVE GUARDS (back button / tab close)
@@ -511,6 +545,8 @@ function AttemptPage({ service } = {}) {
   const saveOnLeave = useCallback(
     (release) => {
       if (conflictRef.current || !sessionIdRef.current) return;
+      // never send anything under another student's login
+      if (queueRef.current && !queueRef.current.ownerStillLoggedIn()) return;
       const token = localStorage.getItem("token");
       const headers = {
         "Content-Type": "application/json",
@@ -1430,10 +1466,34 @@ function AttemptPage({ service } = {}) {
       )}
 
       {/* ========================= */}
+      {/* SAVING STOPPED (signed out / another student signed in) */}
+      {/* ========================= */}
+
+      {dropped && overlay(
+        <>
+          <div className="text-4xl mb-3">🔒</div>
+          <h2 className="text-xl font-bold text-gray-900">Saving stopped</h2>
+          <p className="text-gray-600 mt-2">{DROPPED_TEXT[dropped]}</p>
+          <div className="mt-6">
+            <button
+              onClick={() => {
+                leftRef.current = true;
+                navigate(dropped === "gone" ? svc.leavePath : "/login");
+              }}
+              className="w-full bg-black text-white py-3 rounded-2xl font-medium hover:opacity-90"
+            >
+              {dropped === "gone" ? "Back" : "Go to login"}
+            </button>
+          </div>
+        </>,
+        "Saving stopped"
+      )}
+
+      {/* ========================= */}
       {/* OPENED IN ANOTHER TAB / DEVICE */}
       {/* ========================= */}
 
-      {conflict && overlay(
+      {conflict && !dropped && overlay(
         <>
           <div className="text-4xl mb-3">🗂</div>
           <h2 className="text-xl font-bold text-gray-900">{CONFLICT_TEXT}</h2>

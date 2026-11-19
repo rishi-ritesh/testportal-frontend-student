@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { loginUser } from "../../services/auth.service";
+import { purgeOtherUsersQueues } from "../../lib/saveQueue";
 import BrandLogo from "../../components/BrandLogo";
 
 function LoginPage() {
@@ -38,6 +39,10 @@ function LoginPage() {
         "user",
         JSON.stringify(data.user)
       );
+
+      // unsent test saves left on this device by a different student are
+      // never sent under this login
+      purgeOtherUsersQueues(data.user?.id);
 
       navigate("/dashboard");
     } catch (err) {

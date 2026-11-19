@@ -11,6 +11,58 @@
 //    save that is not newer than the one it already has for that question,
 //    so a slow old save can never overwrite a newer answer and a repeated
 //    (retried) save is never counted twice.
+//  - The queue belongs to the student who made it. If a different student
+//    (or nobody) is logged in when a save is due, everything is dropped
+//    without being sent, and the device copy is removed.
+//  - A save the server refuses for good is dropped, never retried. If the
+//    refusal means the whole attempt is over for this device (not logged in,
+//    attempt not found, test already submitted) the whole queue and its
+//    device copy are cleared.
+
+const STORAGE_PREFIX = "testSaveQueue:";
+
+// Who is logged in on this device right now: the student's id (or, if the
+// stored login has no id, the login token itself). null = nobody.
+export const currentUserId = () => {
+  try {
+    const id = JSON.parse(localStorage.getItem("user") || "null")?.id;
+    if (id) return String(id);
+    const token = localStorage.getItem("token");
+    return token ? "token:" + token : null;
+  } catch {
+    return null;
+  }
+};
+
+// After a login: remove any unsent test saves left by a different student.
+export function purgeOtherUsersQueues(userId) {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(STORAGE_PREFIX)) keys.push(k);
+    }
+    keys.forEach((k) => {
+      let owner = null;
+      try {
+        owner = JSON.parse(localStorage.getItem(k) || "null")?.owner || null;
+      } catch {
+        /* unreadable → remove */
+      }
+      if (!owner || String(owner) !== String(userId)) localStorage.removeItem(k);
+    });
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+// Refusals that end this attempt for this device (vs. refusing one save).
+const endsAttempt = (err) => {
+  const status = err?.response?.status;
+  const message = String(err?.response?.data?.message || "");
+  if (status === 401 || status === 404) return true;
+  return /already (completed|submitted)/i.test(message) && !/section/i.test(message);
+};
 
 const RETRY_DELAYS = [1000, 2000, 5000, 10000, 15000];
 
@@ -24,7 +76,15 @@ export const isNetworkError = (err) => {
   return !status || status >= 500 || status === 408 || status === 429;
 };
 
-export function createSaveQueue({ storageKey, send, onChange, onConflict, onDropped }) {
+export function createSaveQueue({
+  storageKey,
+  owner,
+  currentOwner = currentUserId,
+  send,
+  onChange,
+  onConflict,
+  onDropped,
+}) {
   let items = []; // { key, seq, payload, timeOnly, sending?, beaconed? }
   let lastSeq = 0;
   let sending = false;
@@ -32,12 +92,18 @@ export function createSaveQueue({ storageKey, send, onChange, onConflict, onDrop
   let retryTimer = null;
   let stopped = false;
   let destroyed = false;
+  // dropped for good (other student / signed out / attempt over): accepts
+  // nothing more and never writes to the device again
+  let dead = false;
   const waiters = new Set();
 
   // ---- restore what an earlier page left behind ----
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
-    if (saved) {
+    if (saved && saved.owner && owner && String(saved.owner) !== String(owner)) {
+      // another student's leftovers — never send them under this login
+      localStorage.removeItem(storageKey);
+    } else if (saved) {
       lastSeq = Number(saved.seq) || 0;
       items = (Array.isArray(saved.items) ? saved.items : []).map((i) => ({
         ...i,
@@ -51,10 +117,12 @@ export function createSaveQueue({ storageKey, send, onChange, onConflict, onDrop
   }
 
   const persist = () => {
+    if (dead) return;
     try {
       localStorage.setItem(
         storageKey,
         JSON.stringify({
+          owner,
           seq: lastSeq,
           items: items.map(({ key, seq, payload, timeOnly }) => ({ key, seq, payload, timeOnly })),
         })
@@ -86,8 +154,30 @@ export function createSaveQueue({ storageKey, send, onChange, onConflict, onDrop
     return lastSeq;
   };
 
+  // drop everything and the device copy, for good
+  const dropAll = () => {
+    dead = true;
+    items = [];
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // the student who made these saves is still the one logged in
+  const ownerStillLoggedIn = () =>
+    Boolean(owner) && String(currentOwner() || "") === String(owner);
+
   const pump = () => {
     if (sending || stopped || destroyed || retryTimer || !items.length) return;
+    if (!ownerStillLoggedIn()) {
+      dropAll();
+      stopped = true;
+      notify();
+      onDropped?.("other_user");
+      return;
+    }
     const item = items[0];
     sending = true;
     item.sending = true;
@@ -106,9 +196,17 @@ export function createSaveQueue({ storageKey, send, onChange, onConflict, onDrop
             stopped = true;
             onConflict?.(err);
           } else if (!isNetworkError(err)) {
-            // the server refused it for good (e.g. section already submitted)
-            items = items.filter((i) => i !== item);
-            onDropped?.(err, item);
+            if (endsAttempt(err)) {
+              // not logged in / attempt gone / test already submitted:
+              // nothing in this queue can ever be saved
+              dropAll();
+              stopped = true;
+              onDropped?.(err.response?.status === 401 ? "signed_out" : "attempt_over", err);
+            } else {
+              // this one save was refused (e.g. its section was already submitted)
+              items = items.filter((i) => i !== item);
+              onDropped?.("refused", err);
+            }
           } else {
             failures += 1;
             const delay = RETRY_DELAYS[Math.min(failures, RETRY_DELAYS.length) - 1];
@@ -128,6 +226,7 @@ export function createSaveQueue({ storageKey, send, onChange, onConflict, onDrop
   };
 
   const add = (item, mergeable) => {
+    if (dead) return item;
     const idx = mergeable
       ? items.findIndex((i) => i.key === item.key && !i.sending && !i.beaconed)
       : -1;
@@ -203,6 +302,7 @@ export function createSaveQueue({ storageKey, send, onChange, onConflict, onDrop
       notify();
     },
     resume() {
+      if (dead) return;
       stopped = false;
       failures = 0;
       notify();
@@ -212,14 +312,14 @@ export function createSaveQueue({ storageKey, send, onChange, onConflict, onDrop
 
     // the test is finished — nothing left to keep on this device
     clear() {
-      items = [];
-      try {
-        localStorage.removeItem(storageKey);
-      } catch {
-        /* ignore */
-      }
+      dropAll();
       notify();
     },
+
+    isDead: () => dead,
+
+    // the student who made these saves is still the one logged in
+    ownerStillLoggedIn,
 
     destroy() {
       destroyed = true;
