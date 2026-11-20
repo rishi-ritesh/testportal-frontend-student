@@ -233,6 +233,10 @@ function AttemptPage({ service } = {}) {
   // event handlers / intervals need
   const queueRef = useRef(null);
   const sessionIdRef = useRef(null);
+  // this page has released its claim on the test (tab closing / leaving):
+  // it sends no more heartbeats, so one fired during the same close (tab
+  // hidden) can't mark it live again; reset if the page is restored
+  const releasedRef = useRef(false);
   const loadIdRef = useRef(0);
   const frozenRef = useRef(true);
   const conflictRef = useRef(null);
@@ -554,8 +558,11 @@ function AttemptPage({ service } = {}) {
       };
 
       const s = secondsLeftRef.current;
+      // after a release, a non-release send is not a heartbeat any more
+      const sendTimer = release || !releasedRef.current;
+      if (release) releasedRef.current = true;
       try {
-        fetch(svc.timerUrl, {
+        if (sendTimer) fetch(svc.timerUrl, {
           method: "POST",
           headers,
           body: JSON.stringify({
@@ -611,8 +618,17 @@ function AttemptPage({ service } = {}) {
       }
       saveOnLeave(true);
     };
+    // back from the back/forward cache: this page is in use again, so its
+    // heartbeats count again (as before)
+    const onPageShow = (e) => {
+      if (e.persisted) releasedRef.current = false;
+    };
     window.addEventListener("pagehide", onPageHide);
-    return () => window.removeEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, [saveOnLeave, sessionKey]);
 
   // Tab hidden → save now. Visible again → reload state and resync the clock.
@@ -636,13 +652,13 @@ function AttemptPage({ service } = {}) {
   useEffect(() => {
     saveOnLeaveRef.current = saveOnLeave;
   }, [saveOnLeave]);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    releasedRef.current = false; // (re)mounted: this screen is in use
+    return () => {
       saveOnLeaveRef.current(true);
       queueRef.current?.destroy();
-    },
-    []
-  );
+    };
+  }, []);
 
   // online / offline
   useEffect(() => {
@@ -715,14 +731,16 @@ function AttemptPage({ service } = {}) {
   useEffect(() => {
     if (frozen) return;
     const id = setInterval(() => {
-      svc
-        .syncTimer(secondsLeftRef.current ?? undefined, {
-          sessionId: sessionIdRef.current,
-          beat: Date.now(), // send time: a heartbeat sent before a release is ignored
-        })
-        .catch((err) => {
-          if (isOtherSessionError(err)) setConflict("lost");
-        });
+      if (!releasedRef.current) {
+        svc
+          .syncTimer(secondsLeftRef.current ?? undefined, {
+            sessionId: sessionIdRef.current,
+            beat: Date.now(), // send time: a heartbeat sent before a release is ignored
+          })
+          .catch((err) => {
+            if (isOtherSessionError(err)) setConflict("lost");
+          });
+      }
       if (!document.hidden) {
         const q = currentQuestionRef.current;
         const secs = takeQuestionSeconds();
@@ -1024,7 +1042,8 @@ function AttemptPage({ service } = {}) {
         await svc.pause(secondsLeftRef.current, { sessionId: sessionIdRef.current });
       }
       // free this screen's claim first, so reopening the test straight away
-      // never asks "Continue here?"
+      // never asks "Continue here?" (and send no heartbeat after it)
+      releasedRef.current = true;
       await svc
         .syncTimer(secondsLeftRef.current ?? undefined, {
           sessionId: sessionIdRef.current,
