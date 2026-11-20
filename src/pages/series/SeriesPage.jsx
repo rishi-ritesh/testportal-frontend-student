@@ -50,23 +50,29 @@ function SeriesPage() {
   return (
     <div className="max-w-5xl mx-auto">
       <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-6 py-5 flex items-center justify-between gap-4">
-          <h1 className="text-white text-lg font-bold tracking-wide flex items-center gap-3">
-            <span className="text-2xl">📝</span>
-            ALL TEST SERIES
-            <span className="text-sm font-medium bg-white/15 px-3 py-1 rounded-full">
-              {packages.length}
-            </span>
-          </h1>
-          <input
-            placeholder="Search series…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="min-h-10 rounded-xl px-3 py-2 text-sm outline-none w-44 md:w-56"
-          />
+        {/* phones: blue title bar, then the search box on its own line
+            below it; sm and up: title and search share the blue bar */}
+        <div className="sm:bg-gradient-to-r sm:from-blue-800 sm:to-blue-600 sm:px-6 sm:py-5 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-4 py-4 sm:bg-none sm:p-0">
+            <h1 className="text-white text-base sm:text-lg font-bold tracking-wide flex items-center gap-2 sm:gap-3 whitespace-nowrap">
+              <span className="text-xl sm:text-2xl">📝</span>
+              ALL TEST SERIES
+              <span className="text-sm font-medium bg-white/15 px-3 py-1 rounded-full">
+                {packages.length}
+              </span>
+            </h1>
+          </div>
+          <div className="px-4 pt-4 pb-1 sm:p-0">
+            <input
+              placeholder="Search series…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="min-h-10 rounded-xl px-3 py-2 text-sm outline-none w-full border border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white sm:border-0 sm:bg-white sm:w-44 md:w-56"
+            />
+          </div>
         </div>
 
         {filtered.length === 0 ? (
@@ -80,10 +86,11 @@ function SeriesPage() {
             {pageItems.map((pkg, i) => (
               <div
                 key={pkg._id}
-                className="px-6 py-4 flex items-center justify-between gap-4"
+                className="px-4 sm:px-6 py-4 flex items-center justify-between gap-3 sm:gap-4"
               >
                 <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 truncate">
+                  {/* phones: the full name, wrapped (never cut off) */}
+                  <p className="font-semibold text-gray-900 break-words sm:truncate">
                     {(currentPage - 1) * PAGE_SIZE + i + 1}. {pkg.name}
                   </p>
                   <p className="text-sm text-gray-500 mt-1">

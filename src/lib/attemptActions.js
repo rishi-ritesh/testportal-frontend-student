@@ -4,6 +4,9 @@
 //
 //   not started → "Start Test"            (instructions)
 //   in progress → "Resume"                (straight to the open attempt)
+//                 + "View Result"           (ranked result, when the ranked
+//                                            attempt is done and a practice
+//                                            is the open one)
 //   completed   → "View Result"           (ranked result)
 //                 + "Re-attempt (Practice)" (instructions)
 //
@@ -20,9 +23,17 @@ export function mockActions(testId, attempt) {
       (a) => a && a.status !== "completed"
     );
     if (open) {
+      const rankedDone =
+        open !== attempt.ranked && attempt.ranked?.status === "completed";
       return {
         label: "In progress",
         primary: { text: "Resume", to: `/attempt/${open.attemptId}` },
+        ...(rankedDone && {
+          secondary: {
+            text: "View Result",
+            to: `/result/${attempt.ranked.attemptId}`,
+          },
+        }),
       };
     }
   }
