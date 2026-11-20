@@ -563,6 +563,7 @@ function AttemptPage({ service } = {}) {
             remainingSeconds: s ?? undefined,
             sessionId: sessionIdRef.current,
             release,
+            beat: Date.now(), // send time: see the server's syncTimer
           }),
           keepalive: true,
         }).catch(() => {});
@@ -715,7 +716,10 @@ function AttemptPage({ service } = {}) {
     if (frozen) return;
     const id = setInterval(() => {
       svc
-        .syncTimer(secondsLeftRef.current ?? undefined, { sessionId: sessionIdRef.current })
+        .syncTimer(secondsLeftRef.current ?? undefined, {
+          sessionId: sessionIdRef.current,
+          beat: Date.now(), // send time: a heartbeat sent before a release is ignored
+        })
         .catch((err) => {
           if (isOtherSessionError(err)) setConflict("lost");
         });
@@ -1025,6 +1029,7 @@ function AttemptPage({ service } = {}) {
         .syncTimer(secondsLeftRef.current ?? undefined, {
           sessionId: sessionIdRef.current,
           release: true,
+          beat: Date.now(),
         })
         .catch(() => {});
       leftRef.current = true;
