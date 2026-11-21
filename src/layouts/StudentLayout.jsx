@@ -58,7 +58,7 @@ function StudentLayout() {
                 setMenuOpen(false);
                 navigate("/dashboard");
               }}
-              aria-label="TestPortal home"
+              aria-label="AdhyayanSetu home"
               className="shrink-0 min-h-11 flex items-center"
             >
               <BrandLogo height={36} />
@@ -166,7 +166,7 @@ function StudentLayout() {
       <footer className="bg-white border-t border-gray-200 px-4 sm:px-6 py-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
           <div className="flex items-center gap-2">
-            <BrandLogo height={24} showName={false} />
+            <BrandLogo height={22} showName={false} />
             <span>© {new Date().getFullYear()} {BRAND.name}</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">

@@ -1,37 +1,41 @@
 import { BRAND } from "../config/brand";
 
-// The site logo: a blue rounded tile with a white "T", plus the name as real
-// text. `height` is the tile size in px; `showName` hides the text where
-// space is tight. `smallHeight` (optional) is the tile size on phones (below
-// 640px); `height` is used from 640px up.
+// The AdhyayanSetu emblem with the name as real text (readable by Google and
+// screen readers). `height` is the emblem height in px; `showName` hides the
+// text where space is tight. `smallHeight` (optional) is the emblem height on
+// phones (below 640px); `height` is used from 640px up.
 function BrandLogo({ height = 36, smallHeight, showName = true, textClassName = "text-xl" }) {
-  const font = (size) => `${Math.round(size * 0.45)}px`;
+  const width = Math.round(height * BRAND.emblemRatio);
 
-  // the tile never shrinks inside a flex row; with smallHeight its size
+  // the emblem never shrinks inside a flex row; with smallHeight its size
   // switches at the sm breakpoint through CSS variables
   const sizeStyle = smallHeight
     ? {
-        "--logo": `${smallHeight}px`,
-        "--logo-font": font(smallHeight),
-        "--logo-sm": `${height}px`,
-        "--logo-font-sm": font(height),
+        "--logo-w": `${Math.round(smallHeight * BRAND.emblemRatio)}px`,
+        "--logo-h": `${smallHeight}px`,
+        "--logo-w-sm": `${width}px`,
+        "--logo-h-sm": `${height}px`,
       }
-    : { width: height, height, minWidth: height, fontSize: font(height) };
+    : { width, height, minWidth: width };
   const sizeClass = smallHeight
-    ? "w-(--logo) h-(--logo) min-w-(--logo) text-(length:--logo-font) sm:w-(--logo-sm) sm:h-(--logo-sm) sm:min-w-(--logo-sm) sm:text-(length:--logo-font-sm)"
-    : "";
+    ? "block w-(--logo-w) h-(--logo-h) min-w-(--logo-w) sm:w-(--logo-w-sm) sm:h-(--logo-h-sm) sm:min-w-(--logo-w-sm)"
+    : "block";
 
   return (
     <span className="flex items-center gap-2.5 shrink-0">
-      <span
-        aria-hidden="true"
-        className={`flex items-center justify-center shrink-0 rounded-[28%] bg-gradient-to-br from-blue-700 to-blue-500 text-white font-bold leading-none shadow-sm ${sizeClass}`}
-        style={sizeStyle}
-      >
-        T
-      </span>
+      <picture className="block shrink-0">
+        <source type="image/webp" srcSet={`${BRAND.emblem} 1x, ${BRAND.emblem2x} 2x`} />
+        <img
+          src={BRAND.emblemPng}
+          width={width}
+          height={height}
+          alt={showName ? "" : `${BRAND.name} logo`}
+          className={sizeClass}
+          style={sizeStyle}
+        />
+      </picture>
       {showName && (
-        <span className={`${textClassName} font-bold text-gray-900 whitespace-nowrap`}>
+        <span className={`${textClassName} font-bold tracking-tight text-[#0B2357] whitespace-nowrap`}>
           {BRAND.name}
         </span>
       )}

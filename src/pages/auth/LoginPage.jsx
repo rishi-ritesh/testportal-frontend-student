@@ -60,7 +60,7 @@ function LoginPage() {
       {/* Logo */}
       <div className="mb-8 sm:mb-10">
         <h1 className="m-0">
-          <BrandLogo height={44} smallHeight={40} textClassName="text-2xl sm:text-3xl" />
+          <BrandLogo height={56} smallHeight={40} textClassName="text-2xl sm:text-3xl" />
         </h1>
 
         <p className="text-gray-500 mt-4">
